@@ -174,5 +174,6 @@
 <string name="about_credits_tvmaze">TV data by TVmaze (tvmaze.com), CC BY-SA</string>
 <string name="about_credits_tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
 <string name="msg_migrating">Migrating library…</string>
+<string name="msg_migrating_wait">This might take a little time. Please wait…</string>
 <string name="msg_migrated">Library migrated</string>
 </resources>

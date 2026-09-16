@@ -88,7 +88,6 @@ import android.view.ContextMenu.ContextMenuInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
-import android.util.TypedValue;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -337,14 +336,14 @@ public class DroidShows extends ListActivity
 			R.drawable.ic_drawer_tv,
 			R.drawable.ic_drawer_movie,
 		};
-		private final int iconTint;
+		// Light-grey tint for the outline drawer icons on the app's dark theme.
+		// Kept as a constant on purpose: the app's custom theme does not define
+		// android:textColorSecondary, so resolving it via TypedValue yielded 0,
+		// i.e. a fully transparent tint that rendered the icons invisible.
+		private static final int ICON_TINT = 0xFFBDBDBD;
 
 		public DrawerAdapter() {
 			super(DroidShows.this, R.layout.drawer_row);
-			// Tint the outline icons with the theme's secondary text colour.
-			TypedValue tv = new TypedValue();
-			DroidShows.this.getTheme().resolveAttribute(android.R.attr.textColorSecondary, tv, true);
-			iconTint = tv.data;
 		}
 
 		@Override
@@ -364,7 +363,7 @@ public class DroidShows extends ListActivity
 			Drawable d = iconView.getDrawable();
 			if (d != null) {
 				d = DrawableCompat.wrap(d.mutate());
-				DrawableCompat.setTint(d, iconTint);
+				DrawableCompat.setTint(d, ICON_TINT);
 				iconView.setImageDrawable(d);
 			}
 			return convertView;
@@ -419,7 +418,7 @@ public class DroidShows extends ListActivity
 		final ProgressDialog migPD = new ProgressDialog(this);
 		migPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 		migPD.setTitle(R.string.msg_migrating);
-		migPD.setMessage(getString(R.string.msg_migrating));
+		migPD.setMessage(getString(R.string.msg_migrating_wait));
 		migPD.setCancelable(false);
 		migPD.setMax(toMigrate.size());
 		migPD.setProgress(0);
