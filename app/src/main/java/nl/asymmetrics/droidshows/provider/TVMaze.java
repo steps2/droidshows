@@ -10,6 +10,7 @@ import org.json.JSONObject;
 
 import nl.asymmetrics.droidshows.thetvdb.model.Episode;
 import nl.asymmetrics.droidshows.thetvdb.model.Serie;
+import android.os.SystemClock;
 import android.util.Log;
 
 /**
@@ -26,6 +27,29 @@ public class TVMaze {
 	private static final String TAG = "TVMaze";
 	private static final String BASE = "https://api.tvmaze.com";
 
+	/**
+	 * Shared API throttle: TVMaze's free tier allows ~20 requests per
+	 * 10 seconds. All TVMaze HTTP calls (from any thread) go through
+	 * throttleApi() so at least MIN_API_INTERVAL_MS elapses between them.
+	 */
+	private static final Object API_LOCK = new Object();
+	private static long lastApiCallMs = 0;
+	private static final long MIN_API_INTERVAL_MS = 600;
+
+	private static void throttleApi() {
+		synchronized (API_LOCK) {
+			long wait = MIN_API_INTERVAL_MS - (SystemClock.uptimeMillis() - lastApiCallMs);
+			if (wait > 0) {
+				try {
+					API_LOCK.wait(wait);
+				} catch (InterruptedException e) {
+					// ignore; a slightly early call is harmless
+				}
+			}
+			lastApiCallMs = SystemClock.uptimeMillis();
+		}
+	}
+
 	public TVMaze() {
 		// no API key needed
 	}
@@ -37,6 +61,7 @@ public class TVMaze {
 	 *         back off and retry instead of treating it as a dead show.
 	 */
 	public List<Serie> searchShows(String query) throws JsonFetcher.RateLimitException {
+		throttleApi();
 		List<Serie> results = new ArrayList<Serie>();
 		try {
 			String encoded = URLEncoder.encode(query, "UTF-8");
@@ -81,6 +106,7 @@ public class TVMaze {
 	 *         back off and retry instead of treating it as a dead show.
 	 */
 	public Serie getShow(String tvmazeId) throws JsonFetcher.RateLimitException {
+		throttleApi();
 		try {
 			JSONObject show = JsonFetcher.getJsonObject(BASE + "/shows/" + tvmazeId + "?embed=cast");
 			JSONArray eps = JsonFetcher.getJsonArray(BASE + "/shows/" + tvmazeId + "/episodes?specials=1");
@@ -187,6 +213,7 @@ public class TVMaze {
 	 *         back off and retry instead of treating it as a dead show.
 	 */
 	public String resolveTVDBId(String tvdbId) throws JsonFetcher.RateLimitException {
+		throttleApi();
 		try {
 			JSONObject show = JsonFetcher.getJsonObject(BASE + "/lookup/shows?thetvdb=" + tvdbId);
 			if (show == null) {

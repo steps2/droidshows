@@ -22,6 +22,11 @@ import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.io.FileUtils;
 import nl.asymmetrics.droidshows.R;
 import nl.asymmetrics.droidshows.provider.JsonFetcher;
@@ -433,18 +438,20 @@ public class DroidShows extends ListActivity
 		migPD.setMax(toMigrate.size());
 		migPD.setProgress(0);
 		migPD.show();
-		final TVMaze tvMaze = new TVMaze();
-		Thread migTh = new Thread(new Runnable() {
-			public void run() {
-				String failures = "";
-				for (int i = 0; i < toMigrate.size(); i++) {
-					final String tvdbId = toMigrate.get(i)[0];
-					final String name = toMigrate.get(i)[1];
+		final ExecutorService migExec = Executors.newFixedThreadPool(3);
+		final AtomicInteger migProgress = new AtomicInteger(0);
+		final ConcurrentLinkedQueue<String> migFailures = new ConcurrentLinkedQueue<String>();
+		for (int i = 0; i < toMigrate.size(); i++) {
+			final String tvdbId = toMigrate.get(i)[0];
+			final String name = toMigrate.get(i)[1];
+			migExec.submit(new Runnable() {
+				public void run() {
+					TVMaze tvMaze = new TVMaze();
 					try {
 						String tvmazeId = resolveTvmazeId(tvMaze, tvdbId);
 						Serie show = (tvmazeId == null || tvmazeId.isEmpty() ? null : getTVMazeShow(tvMaze, tvmazeId));
 						if (show == null) {
-							failures += name +" ";
+							migFailures.add(name);
 						} else {
 							show.setId(tvdbId);	// keep the existing DB row; TVMaze id goes to tvmazeId
 							show.setTvmazeId(tvmazeId);
@@ -453,15 +460,26 @@ public class DroidShows extends ListActivity
 						}
 					} catch (Exception e) {
 						Log.e(SQLiteStore.TAG, "Migration failed for "+ name, e);
-						failures += name +" ";
+						migFailures.add(name);
 					}
-					final int progress = i + 1;
+					final int progress = migProgress.incrementAndGet();
 					runOnUiThread(new Runnable() {
 						public void run() {migPD.setProgress(progress);}
 					});
-					sleepQuietly(600);
 				}
-				final String failedResult = failures;
+			});
+		}
+		migExec.shutdown();
+		Thread migWaiter = new Thread(new Runnable() {
+			public void run() {
+				try {
+					migExec.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
+				} catch (InterruptedException e) {
+				}
+				StringBuilder failedSb = new StringBuilder();
+				for (String f : migFailures)
+					failedSb.append(f).append(' ');
+				final String failedResult = failedSb.toString();
 				runOnUiThread(new Runnable() {
 					public void run() {
 						migPD.dismiss();
@@ -474,7 +492,7 @@ public class DroidShows extends ListActivity
 				});
 			}
 		});
-		migTh.start();
+		migWaiter.start();
 	}
 
 	/*
