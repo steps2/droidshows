@@ -9,7 +9,9 @@
 			<ImageView android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="3dp" android:src="@android:drawable/ic_menu_add" android:onClick="searchForShow"/>
 			<ImageView android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="3dp" android:src="@android:drawable/ic_menu_close_clear_cancel" android:onClick="clearFilter"/>
 		</LinearLayout>
-		<nl.asymmetrics.droidshows.ui.BounceListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
+		<androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/swipe_refresh" android:layout_width="fill_parent" android:layout_height="fill_parent">
+			<nl.asymmetrics.droidshows.ui.BounceListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
+		</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 		<LinearLayout android:id="@+id/android:empty" android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content" android:gravity="center_horizontal">
 			<TextView android:id="@+id/empty_text" android:layout_width="fill_parent" android:layout_height="wrap_content" android:padding="9dp" android:text="@string/layout_main_no_items"/>
 			<Button android:id="@+id/add_show" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/menu_context_add_serie" android:onClick="searchForShow"/>

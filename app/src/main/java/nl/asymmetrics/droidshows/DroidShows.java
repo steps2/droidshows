@@ -110,6 +110,7 @@ import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import nl.asymmetrics.droidshows.ui.HamburgerDrawable;
 
 public class DroidShows extends ListActivity
@@ -118,6 +119,22 @@ public class DroidShows extends ListActivity
 	// the whole minSdk-14 range.
 	private android.graphics.drawable.Drawable menuIcon(int resId) {
 		return AppCompatResources.getDrawable(this, resId);
+	}
+
+	// Android hides icons in the overflow (⋮) popup unless opted in;
+	// reflection keeps this working with framework and androidx menus alike.
+	@Override
+	public boolean onMenuOpened(int featureId, Menu menu) {
+		if (menu != null) {
+			try {
+				Method m = menu.getClass().getDeclaredMethod("setOptionalIconsVisible", boolean.class);
+				m.setAccessible(true);
+				m.invoke(menu, true);
+			} catch (Exception e) {
+				Log.w("DroidShows", "Could not enable menu icons", e);
+			}
+		}
+		return super.onMenuOpened(featureId, menu);
 	}
 
 	// defined in build.gradle either "" for release or "_DEBUG" for debug build
@@ -155,6 +172,11 @@ public class DroidShows extends ListActivity
 	private static AlertDialog m_AlertDlg;
 	private static ProgressDialog m_ProgressDialog = null;
 	private static ProgressDialog updateAllSeriesPD = null;
+	// Pull-to-refresh: swipe-triggered runs show the SwipeRefreshLayout spinner
+	// instead of the modal ProgressDialog.
+	private SwipeRefreshLayout swipeRefresh = null;
+	private boolean swipeTriggered = false;
+	private volatile boolean updatingAll = false;
 	public static SeriesAdapter seriesAdapter;
 	private static BounceListView listView = null;
 	private static String backFromSeasonSerieId;
@@ -298,6 +320,20 @@ public class DroidShows extends ListActivity
 		listView = (BounceListView) getListView();
 		listView.setDivider(null);
 		listView.setOverscrollHeader(getResources().getDrawable(R.drawable.shape_gradient_ring));
+		swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
+		swipeRefresh.setColorSchemeResources(android.R.color.holo_blue_bright,
+			android.R.color.holo_green_light, android.R.color.holo_orange_light, android.R.color.holo_red_light);
+		swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+			@Override
+			public void onRefresh() {
+				if (updatingAll) {
+					swipeRefresh.setRefreshing(false);
+					return;
+				}
+				swipeTriggered = true;
+				updateAllSeries(showArchive);
+			}
+		});
 		if (savedInstanceState != null) {
 			showArchive = savedInstanceState.getInt("showArchive");
 			mediaType = savedInstanceState.getInt("mediaType", 0);
@@ -1797,7 +1833,19 @@ public class DroidShows extends ListActivity
 	public void updateAllSeries(final int showArchive) {
 		if (!utils.isNetworkAvailable(DroidShows.this)) {
 			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
-		} else if (updateAllSeriesPD == null || !updateAllSeriesPD.isShowing()) {
+			if (swipeTriggered) {
+				swipeTriggered = false;
+				if (swipeRefresh != null)
+					swipeRefresh.setRefreshing(false);
+			}
+		} else if (updatingAll) {
+			// an update is already running (swipe, bounce or menu) — don't stack another one
+			if (swipeTriggered) {
+				swipeTriggered = false;
+				if (swipeRefresh != null)
+					swipeRefresh.setRefreshing(false);
+			}
+		} else {
 			final List<TVShowItem> seriesToUpdate = new ArrayList<TVShowItem>();
 			List<String> ids = db.getSeries(searching() ? 2 : showArchive, false, null, mediaType);
 			for (String id : ids)
@@ -1805,8 +1853,10 @@ public class DroidShows extends ListActivity
 			final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
 			final Runnable updateMessage = new Runnable() {
 				public void run() {
-					updateAllSeriesPD.setMessage(dialogMsg);
-					updateAllSeriesPD.show();
+					if (!swipeTriggered) {
+						updateAllSeriesPD.setMessage(dialogMsg);
+						updateAllSeriesPD.show();
+					}
 				}
 			};
 			final Runnable updateallseries = new Runnable() {
@@ -1820,8 +1870,10 @@ public class DroidShows extends ListActivity
 						Log.d(SQLiteStore.TAG, "Getting updated info from "+ (isMovie ? "TMDB" : "TVMaze")
 							+" for "+ (isMovie ? "movie " : "TV show ") + item.getName() +" ["+ (i+1) +"/"+ (seriesToUpdate.size()) +"]");
 						dialogMsg = item.getName() + "\u2026";
-						updateAllSeriesPD.incrementProgressBy(1);
-						runOnUiThread(updateMessage);
+						if (!swipeTriggered) {
+							updateAllSeriesPD.incrementProgressBy(1);
+							runOnUiThread(updateMessage);
+						}
 						Serie sToUpdate = null;
 						if (isMovie) {
 							if (apiKey != null && !apiKey.isEmpty())
@@ -1862,17 +1914,31 @@ public class DroidShows extends ListActivity
 						});
 					}
 					updateShowStats();
-					updateAllSeriesPD.dismiss();
+					if (swipeTriggered) {
+						swipeTriggered = false;
+						runOnUiThread(new Runnable() {
+							public void run() {
+								if (swipeRefresh != null)
+									swipeRefresh.setRefreshing(false);
+							}
+						});
+					} else {
+						updateAllSeriesPD.dismiss();
+					}
+					updatingAll = false;
 				}
 			};
-			updateAllSeriesPD = new ProgressDialog(this);
-			updateAllSeriesPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-			updateAllSeriesPD.setTitle(mediaType == 1 ? R.string.messages_title_updating_movies : R.string.messages_title_updating_series);
-			updateAllSeriesPD.setMessage(getString(mediaType == 1 ? R.string.messages_update_movies : R.string.messages_update_series));
-			updateAllSeriesPD.setCancelable(false);
-			updateAllSeriesPD.setMax(seriesToUpdate.size());
-			updateAllSeriesPD.setProgress(0);
-			updateAllSeriesPD.show();
+			if (!swipeTriggered) {
+				updateAllSeriesPD = new ProgressDialog(this);
+				updateAllSeriesPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+				updateAllSeriesPD.setTitle(mediaType == 1 ? R.string.messages_title_updating_movies : R.string.messages_title_updating_series);
+				updateAllSeriesPD.setMessage(getString(mediaType == 1 ? R.string.messages_update_movies : R.string.messages_update_series));
+				updateAllSeriesPD.setCancelable(false);
+				updateAllSeriesPD.setMax(seriesToUpdate.size());
+				updateAllSeriesPD.setProgress(0);
+				updateAllSeriesPD.show();
+			}
+			updatingAll = true;
 			updateAllShowsTh = new Thread(updateallseries);
 			updateAllShowsTh.start();
 		}

@@ -11,7 +11,7 @@
 <string name="menu_filter">Filter shows</string>
 <string name="menu_undo">Undo</string>
 <string name="menu_add_serie">Add a show</string>
-<string name="menu_update">Update shows</string>
+<string name="menu_update">Sync shows</string>
 <string name="menu_search">Search</string>
 <string name="menu_sort_by_name">Sort by name</string>
 <string name="menu_sort_by_unseen">Sort by unseen</string>
@@ -135,7 +135,7 @@
 <string name="mode_watching">Watching</string>
 <string name="mode_finished">Finished</string>
 <string name="menu_add_movie">Add movie</string>
-	<string name="menu_update_movies">Update movies</string>
+	<string name="menu_update_movies">Sync movies</string>
 	<string name="menu_filter_movies">Filter movies</string>
 	<string name="menu_backup_now">Back up now</string>
 	<string name="drawer_open">Open library</string>

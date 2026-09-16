@@ -11,7 +11,7 @@
 <string name="menu_filter">Serien filtern</string>
 <string name="menu_undo">Rückgängig</string>
 <string name="menu_add_serie">Serie hinzufügen</string>
-<string name="menu_update">Serien aktualisieren</string>
+<string name="menu_update">Shows synchronisieren</string>
 <string name="menu_search">Suchen</string>
 <string name="menu_sort_by_name">Nach Name sortieren</string>
 <string name="menu_sort_by_unseen">Ungesehene zuerst</string>
