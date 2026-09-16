@@ -24,10 +24,13 @@ import java.util.Date;
 import java.util.List;
 import org.apache.commons.io.FileUtils;
 import nl.asymmetrics.droidshows.R;
-import nl.asymmetrics.droidshows.thetvdb.TheTVDB;
+import nl.asymmetrics.droidshows.provider.JsonFetcher;
+import nl.asymmetrics.droidshows.provider.TMDB;
+import nl.asymmetrics.droidshows.provider.TVMaze;
 import nl.asymmetrics.droidshows.thetvdb.model.Serie;
 import nl.asymmetrics.droidshows.thetvdb.model.TVShowItem;
 import nl.asymmetrics.droidshows.ui.AddSerie;
+import nl.asymmetrics.droidshows.ui.AddMovie;
 import nl.asymmetrics.droidshows.ui.BounceListView;
 import nl.asymmetrics.droidshows.ui.IconView;
 import nl.asymmetrics.droidshows.ui.SerieSeasons;
@@ -133,7 +136,6 @@ public class DroidShows extends ListActivity
 	public static SeriesAdapter seriesAdapter;
 	private static BounceListView listView = null;
 	private static String backFromSeasonSerieId;
-	private static TheTVDB theTVDB;
 	private Utils utils = new Utils();
 	private Update updateDS;
 	private static final String PREF_NAME = "DroidShowsPref";
@@ -167,13 +169,13 @@ public class DroidShows extends ListActivity
 	private static String lastStatsUpdateCurrent;
 	private static final String LAST_STATS_UPDATE_ARCHIVE_NAME = "last_stats_update_archive";
 	private static String lastStatsUpdateArchive;
+	public static final String TMDB_API_KEY_NAME = "tmdb_api_key";
+	public static int mediaType = 0;	// 0 = TV Shows, 1 = Movies
 	private static final String LANGUAGE_CODE_NAME = "language";
 	private static final String SHOW_NEXT_AIRING = "show_next_airing";
 	public static boolean showNextAiring;
 	private static final String MARK_FROM_LAST_WATCHED = "mark_from_last_watched";
 	public static boolean markFromLastWatched;
-	private static final String USE_MIRROR = "use_mirror";
-	public static boolean useMirror;
 	public static String langCode;
 	private static final String PINNED_SHOWS_NAME = "pinned_shows";
 	private static List<String> pinnedShows = new ArrayList<String>();
@@ -235,7 +237,6 @@ public class DroidShows extends ListActivity
 		langCode = sharedPrefs.getString(LANGUAGE_CODE_NAME, getString(R.string.lang_code));
 		showNextAiring = sharedPrefs.getBoolean(SHOW_NEXT_AIRING, false);
 		markFromLastWatched = sharedPrefs.getBoolean(MARK_FROM_LAST_WATCHED, false);
-		useMirror = sharedPrefs.getBoolean(USE_MIRROR, false);
 		String pinnedShowsStr = sharedPrefs.getString(PINNED_SHOWS_NAME, "");
 		if (!pinnedShowsStr.isEmpty())
 			pinnedShows = new ArrayList<String>(Arrays.asList(pinnedShowsStr.replace("[", "").replace("]", "").split(", ")));
@@ -244,7 +245,8 @@ public class DroidShows extends ListActivity
 
 		// Update database
 		updateDS = new Update(db);
-		if (updateDS.needsUpdate()) {
+		boolean needsMig = updateDS.needsUpdate();
+		if (needsMig) {
 			backup(false, backupFolder);
 			if (updateDS.updateDroidShows())
 				db.updateShowStats();
@@ -254,6 +256,8 @@ public class DroidShows extends ListActivity
 				Toast.makeText(getApplicationContext(), error, Toast.LENGTH_LONG).show();
 			}
 		}
+		if (needsMig)
+			migrateLibraryToTVMaze();
 
 		if (!networksStr.isEmpty())
 			networks = new ArrayList<String>(Arrays.asList(networksStr.replace("[", "").replace("]", "").split(", ")));
@@ -265,6 +269,7 @@ public class DroidShows extends ListActivity
 		listView.setOverscrollHeader(getResources().getDrawable(R.drawable.shape_gradient_ring));
 		if (savedInstanceState != null) {
 			showArchive = savedInstanceState.getInt("showArchive");
+			mediaType = savedInstanceState.getInt("mediaType", 0);
 			getSeries((savedInstanceState.getBoolean("searching") ? 2 : showArchive));
 		} else {
 			getSeries();
@@ -284,6 +289,140 @@ public class DroidShows extends ListActivity
 		keyboard = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
 		padding = (int) (6 * (getApplicationContext().getResources().getDisplayMetrics().densityDpi / 160f));
 		vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+	}
+
+	/*
+	 * Bulk-migrate the existing library from TheTVDB ids to TVMaze ids right
+	 * after the database upgrade that added the tvmazeId column: for every TV
+	 * show row without a tvmazeId, resolve the old TheTVDB id via TVMaze,
+	 * fetch the full show and update the database. Runs in a background
+	 * thread with a horizontal ProgressDialog. Failures are collected and
+	 * reported via errorNotify at the end; anything left unmigrated is
+	 * resolved lazily on the next manual update (see updateSerie).
+	 */
+	private void migrateLibraryToTVMaze() {
+		Cursor c = db.Query("SELECT id, serieName FROM series WHERE mediaType=0 AND (tvmazeId IS NULL OR tvmazeId='')");
+		final List<String[]> toMigrate = new ArrayList<String[]>();
+		try {
+			if (c != null) {
+				c.moveToFirst();
+				if (c.isFirst()) {
+					do {
+						toMigrate.add(new String[] {c.getString(0), c.getString(1)});
+					} while (c.moveToNext());
+				}
+				c.close();
+			}
+		} catch (Exception e) {
+			Log.e(SQLiteStore.TAG, "Error collecting shows to migrate", e);
+		}
+		if (toMigrate.isEmpty())
+			return;
+		if (!utils.isNetworkAvailable(DroidShows.this)) {
+			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
+			return;
+		}
+		final ProgressDialog migPD = new ProgressDialog(this);
+		migPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+		migPD.setTitle(R.string.msg_migrating);
+		migPD.setMessage(getString(R.string.msg_migrating));
+		migPD.setCancelable(false);
+		migPD.setMax(toMigrate.size());
+		migPD.setProgress(0);
+		migPD.show();
+		final TVMaze tvMaze = new TVMaze();
+		Thread migTh = new Thread(new Runnable() {
+			public void run() {
+				String failures = "";
+				for (int i = 0; i < toMigrate.size(); i++) {
+					final String tvdbId = toMigrate.get(i)[0];
+					final String name = toMigrate.get(i)[1];
+					try {
+						String tvmazeId = resolveTvmazeId(tvMaze, tvdbId);
+						Serie show = (tvmazeId == null || tvmazeId.isEmpty() ? null : getTVMazeShow(tvMaze, tvmazeId));
+						if (show == null) {
+							failures += name +" ";
+						} else {
+							show.setId(tvdbId);	// keep the existing DB row; TVMaze id goes to tvmazeId
+							show.setTvmazeId(tvmazeId);
+							db.updateSerie(show, false);
+							updatePosterThumb(tvdbId, show);
+						}
+					} catch (Exception e) {
+						Log.e(SQLiteStore.TAG, "Migration failed for "+ name, e);
+						failures += name +" ";
+					}
+					final int progress = i + 1;
+					runOnUiThread(new Runnable() {
+						public void run() {migPD.setProgress(progress);}
+					});
+					sleepQuietly(600);
+				}
+				final String failedResult = failures;
+				runOnUiThread(new Runnable() {
+					public void run() {
+						migPD.dismiss();
+						getSeries();
+						if (failedResult.length() > 0)
+							errorNotify(failedResult);
+						else
+							Toast.makeText(getApplicationContext(), R.string.msg_migrated, Toast.LENGTH_LONG).show();
+					}
+				});
+			}
+		});
+		migTh.start();
+	}
+
+	/*
+	 * Resolve an old TheTVDB id to a TVMaze id (caching it in the database),
+	 * retrying once after 10s when TVMaze answers HTTP 429. Call from a
+	 * background thread.
+	 */
+	private String resolveTvmazeId(TVMaze tvMaze, String tvdbId) {
+		String tvmazeId = db.getTvmazeId(tvdbId);
+		if (tvmazeId == null || tvmazeId.isEmpty()) {
+			try {
+				tvmazeId = tvMaze.resolveTVDBId(tvdbId);
+			} catch (JsonFetcher.RateLimitException e) {
+				Log.d(SQLiteStore.TAG, "TVMaze rate limited, retrying in 10s");
+				sleepQuietly(10000);
+				try {
+					tvmazeId = tvMaze.resolveTVDBId(tvdbId);
+				} catch (JsonFetcher.RateLimitException e2) {
+					Log.e(SQLiteStore.TAG, "TVMaze still rate limited for "+ tvdbId);
+				}
+			}
+			if (tvmazeId != null && !tvmazeId.isEmpty())
+				db.setTvmazeId(tvdbId, tvmazeId);
+		}
+		return tvmazeId;
+	}
+
+	/*
+	 * Fetch a full TVMaze show, retrying once after 10s on HTTP 429.
+	 * Returns null on failure. Call from a background thread.
+	 */
+	private Serie getTVMazeShow(TVMaze tvMaze, String tvmazeId) {
+		try {
+			return tvMaze.getShow(tvmazeId);
+		} catch (JsonFetcher.RateLimitException e) {
+			Log.d(SQLiteStore.TAG, "TVMaze rate limited, retrying in 10s");
+			sleepQuietly(10000);
+			try {
+				return tvMaze.getShow(tvmazeId);
+			} catch (JsonFetcher.RateLimitException e2) {
+				Log.e(SQLiteStore.TAG, "TVMaze still rate limited for show "+ tvmazeId);
+				return null;
+			}
+		}
+	}
+
+	private static void sleepQuietly(long ms) {
+		try {
+			Thread.sleep(ms);
+		} catch (InterruptedException e) {
+		}
 	}
 
 	private void setFastScroll() {
@@ -359,13 +498,29 @@ public class DroidShows extends ListActivity
 		menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM).setVisible(false);
 		menu.findItem(LOG_MODE_ITEM).setVisible(false);
 		menu.findItem(SEARCH_MENU_ITEM).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-		spinner = new Spinner(this);
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN)
-			spinner.setPopupBackgroundResource(R.drawable.menu_dropdown_panel);
-		spinner.setAdapter(new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1,
+		final Spinner mediaSpinner = new Spinner(this);	// TV Shows / Movies
+		final Spinner modeSpinner = new Spinner(this);	// Watching / Finished / Log
+		spinner = modeSpinner;	// legacy handle used by onBackPressed
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+			mediaSpinner.setPopupBackgroundResource(R.drawable.menu_dropdown_panel);
+			modeSpinner.setPopupBackgroundResource(R.drawable.menu_dropdown_panel);
+		}
+		mediaSpinner.setAdapter(new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1,
 			new String[] {
-				getString(R.string.layout_app_name),
-				getString(R.string.archive),
+				getString(R.string.media_tv_shows),
+				getString(R.string.media_movies),
+			}) {
+			@Override
+			public View getView(int position, View convertView, ViewGroup parent) {
+				View view = super.getView(position, convertView, parent);
+				((TextView) view).setTextColor(getColor(android.R.color.primary_text_dark));
+				return view;
+			}
+		});
+		modeSpinner.setAdapter(new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1,
+			new String[] {
+				getString(R.string.mode_watching),
+				getString(R.string.mode_finished),
 				getString(R.string.menu_log),
 			}) {
 			@Override
@@ -375,9 +530,25 @@ public class DroidShows extends ListActivity
 				return view;
 			}
 		});
+		mediaSpinner.setSelection(mediaType);
+		modeSpinner.setSelection(logMode ? 2 : showArchive);
+		LinearLayout spinnersLayout = new LinearLayout(this);
+		spinnersLayout.setOrientation(LinearLayout.HORIZONTAL);
+		spinnersLayout.addView(mediaSpinner);
+		spinnersLayout.addView(modeSpinner);
 		listView.postDelayed(new Runnable() {
 			public void run() {
-				spinner.setOnItemSelectedListener(new OnItemSelectedListener() {
+				mediaSpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
+					public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
+						if (position != mediaType) {
+							mediaType = position;
+							getSeries();
+						}
+					}
+					public void onNothingSelected(AdapterView<?> arg0) {
+					}
+				});
+				modeSpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
 					public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
 						logMode = position == 2;
 						showArchive = (position == 2 ? showArchive : position);
@@ -392,7 +563,7 @@ public class DroidShows extends ListActivity
 		}, 1000);
 		ActionBar actionBar = getActionBar();
 		actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME);
-		actionBar.setCustomView(spinner);
+		actionBar.setCustomView(spinnersLayout);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 			actionBar.setIcon(R.drawable.actionbar);
 	}
@@ -522,6 +693,18 @@ public class DroidShows extends ListActivity
 		ToggleButton networksFilter = (ToggleButton) filterV.findViewById(R.id.toggle_networks_filter);
 		networksFilter.setChecked(filterNetworks);
 		toggleNetworksFilter(networksFilter);
+		if (mediaType == 1) {
+			// networks are a TV concept: hide the networks filter section for movies
+			networksFilterV.setVisibility(View.GONE);
+			networksFilter.setVisibility(View.GONE);
+			ViewGroup container = (ViewGroup) networksFilterV.getParent();
+			for (int i = 0; i < container.getChildCount(); i++) {
+				View child = container.getChildAt(i);
+				if (child instanceof TextView && !(child instanceof CheckBox) && !(child instanceof ToggleButton)
+					&& ((TextView) child).getText().toString().equals(getString(R.string.dialog_networks)))
+					child.setVisibility(View.GONE);
+			}
+		}
 		m_AlertDlg = new AlertDialog.Builder(this)
 			.setView(filterV)
 			.setTitle(R.string.menu_filter)
@@ -588,13 +771,15 @@ public class DroidShows extends ListActivity
 		((CheckBox) about.findViewById(R.id.switch_swipe_direction)).setChecked(switchSwipeDirection);
 		((CheckBox) about.findViewById(R.id.show_next_airing)).setChecked(showNextAiring);
 		((CheckBox) about.findViewById(R.id.mark_from_last_watched)).setChecked(markFromLastWatched);
-		((CheckBox) about.findViewById(R.id.use_mirror)).setChecked(useMirror);
+		final EditText tmdbKeyV = (EditText) about.findViewById(R.id.tmdb_api_key);
+		tmdbKeyV.setText(sharedPrefs.getString(TMDB_API_KEY_NAME, ""));
 		m_AlertDlg = new AlertDialog.Builder(this)
 			.setView(about)
 			.setTitle(R.string.menu_about)
 			.setIcon(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP ? R.drawable.icon : 0)
 			.setPositiveButton(getString(R.string.dialog_ok), new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int id) {
+					sharedPrefs.edit().putString(TMDB_API_KEY_NAME, tmdbKeyV.getText().toString().trim()).apply();
 					m_AlertDlg.dismiss();
 				}
 			})
@@ -642,9 +827,6 @@ public class DroidShows extends ListActivity
 			case R.id.mark_from_last_watched:
 				markFromLastWatched ^= true;
 				updateShowStats();
-				break;
-			case R.id.use_mirror:
-				useMirror ^= true;
 				break;
 			case R.id.change_language:
 				AlertDialog.Builder changeLang = new AlertDialog.Builder(this);
@@ -894,7 +1076,6 @@ public class DroidShows extends ListActivity
 			menu.add(0, PIN_CONTEXT, PIN_CONTEXT, getString(R.string.menu_context_pin));
 			menu.add(0, DELETE_CONTEXT, DELETE_CONTEXT, getString(R.string.menu_context_delete));
 			menu.add(0, UPDATE_CONTEXT, UPDATE_CONTEXT, getString(R.string.menu_context_update));
-			menu.add(0, SYNOPSIS_LANGUAGE, SYNOPSIS_LANGUAGE, getString(R.string.dialog_change_language) +" ("+ serie.getLanguage() +")");
 		    if (serie.getPassiveStatus())
 		    	menu.findItem(TOGGLE_ARCHIVED_CONTEXT).setTitle(R.string.menu_unarchive);
 		    if (pinnedShows.contains(serie.getSerieId()))
@@ -925,18 +1106,6 @@ public class DroidShows extends ListActivity
 				return true;
 			case UPDATE_CONTEXT :
 				updateSerie(serie, info.position);
-				return true;
-			case SYNOPSIS_LANGUAGE :
-				CharSequence[] langList = Arrays.copyOfRange(getResources().getStringArray(R.array.languages), 1, getResources().getStringArray(R.array.languages).length);
-				AlertDialog.Builder changeLang = new AlertDialog.Builder(this);
-				changeLang.setTitle(R.string.dialog_change_language)
-					.setItems(langList, new DialogInterface.OnClickListener() {
-						public void onClick(DialogInterface dialog, int item) {
-							String langCode = getResources().getStringArray(R.array.langcodes)[item + 1];
-							updateSerie(serie, langCode, info.position);
-						}
-					})
-					.show();
 				return true;
 			case TOGGLE_ARCHIVED_CONTEXT :
 				asyncInfo.cancel(true);
@@ -1057,10 +1226,15 @@ public class DroidShows extends ListActivity
 	}
 
 	private void serieSeasons(int position) {
-		backFromSeasonSerieId = seriesAdapter.getItem(position).getSerieId();
+		TVShowItem item = seriesAdapter.getItem(position);
+		if (item.getMediaType() == 1) {	// movies skip the seasons screen
+			showDetails(item.getSerieId());
+			return;
+		}
+		backFromSeasonSerieId = item.getSerieId();
 		Intent serieSeasons = new Intent(DroidShows.this, SerieSeasons.class);
 		serieSeasons.putExtra("serieId", backFromSeasonSerieId);
-		serieSeasons.putExtra("nextEpisode", seriesAdapter.getItem(position).getUnwatched() > 0);
+		serieSeasons.putExtra("nextEpisode", item.getUnwatched() > 0);
 		startActivity(serieSeasons);
 	}
 
@@ -1276,20 +1450,42 @@ public class DroidShows extends ListActivity
 		} else {
 			final String serieId = serie.getSerieId();
 			final String serieName = serie.getName();
-			final String currentLang = serie.getLanguage();
+			final boolean isMovie = serie.getMediaType() == 1;
+			final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
 			Runnable updateserierun = new Runnable() {
 				public void run() {
-					if (theTVDB == null)
-						theTVDB = new TheTVDB("8AC675886350B3C3", useMirror);
-					Serie sToUpdate = theTVDB.getSerie(serieId, langCode == null ? currentLang : langCode);
+					Serie sToUpdate;
+					String tvmazeId = null;
+					if (isMovie) {
+						if (apiKey == null || apiKey.isEmpty()) {
+							errorNotify(serieName);
+							m_ProgressDialog.dismiss();
+							return;
+						}
+						sToUpdate = new TMDB(apiKey).getMovie(serieId);
+					} else {
+						TVMaze tvMaze = new TVMaze();
+						tvmazeId = resolveTvmazeId(tvMaze, serieId);
+						if (tvmazeId == null || tvmazeId.isEmpty()) {
+							errorNotify(serieName);
+							m_ProgressDialog.dismiss();
+							return;
+						}
+						sToUpdate = getTVMazeShow(tvMaze, tvmazeId);
+					}
 					if (sToUpdate == null) {
 						errorNotify(serieName);
 						m_ProgressDialog.dismiss();
 					} else {
+						if (!isMovie) {	// keep the existing DB row; TVMaze id goes to tvmazeId
+							sToUpdate.setId(serieId);
+							sToUpdate.setTvmazeId(tvmazeId == null ? "" : tvmazeId);
+						}
 						dialogMsg = getString(R.string.messages_title_updating_db) + " - " + serieName;
 						runOnUiThread(changeMessage);
 						String toastMsg = getString(R.string.menu_context_updated);
-						if (!db.updateSerie(sToUpdate, langCode == null ? latestSeasonOption == UPDATE_LATEST_SEASON_ONLY : false))
+						boolean lastSeasonOnly = !isMovie && langCode == null && latestSeasonOption == UPDATE_LATEST_SEASON_ONLY;
+						if (!db.updateSerie(sToUpdate, lastSeasonOnly))
 							toastMsg = "Database error while updating show";
 						updatePosterThumb(serieId, sToUpdate);
 						m_ProgressDialog.dismiss();
@@ -1300,7 +1496,6 @@ public class DroidShows extends ListActivity
 							listView.post(updateShowView(serieId));
 						Looper.loop();
 					}
-					theTVDB = null;
 				}
 			};
 			m_ProgressDialog = ProgressDialog.show(DroidShows.this, serie.getName(), getString(R.string.messages_update_serie), true, false);
@@ -1389,7 +1584,7 @@ public class DroidShows extends ListActivity
 
 	public void searchForShow(View v) {
 		keyboard.hideSoftInputFromWindow(searchV.getWindowToken(), 0);
-		Intent startSearch = new Intent(DroidShows.this, AddSerie.class);
+		Intent startSearch = new Intent(DroidShows.this, mediaType == 1 ? AddMovie.class : AddSerie.class);
 		startSearch.putExtra(SearchManager.QUERY, searchV.getText().toString());
 		startSearch.setAction(Intent.ACTION_SEARCH);
 		startActivity(startSearch);
@@ -1421,9 +1616,10 @@ public class DroidShows extends ListActivity
 			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
 		} else if (updateAllSeriesPD == null || !updateAllSeriesPD.isShowing()) {
 			final List<TVShowItem> seriesToUpdate = new ArrayList<TVShowItem>();
-			List<String> ids = db.getSeries(searching() ? 2 : showArchive, false, null);
+			List<String> ids = db.getSeries(searching() ? 2 : showArchive, false, null, mediaType);
 			for (String id : ids)
 				seriesToUpdate.add(db.createTVShowItem(id));
+			final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
 			final Runnable updateMessage = new Runnable() {
 				public void run() {
 					updateAllSeriesPD.setMessage(dialogMsg);
@@ -1432,32 +1628,49 @@ public class DroidShows extends ListActivity
 			};
 			final Runnable updateallseries = new Runnable() {
 				public void run() {
-					if (theTVDB == null)
-						theTVDB = new TheTVDB("8AC675886350B3C3", useMirror);
 					String updatesFailed = "";
+					TVMaze tvMaze = new TVMaze();
+					TMDB tmdb = new TMDB(apiKey);
 					for (int i = 0; i < seriesToUpdate.size(); i++) {
-						Log.d(SQLiteStore.TAG, "Getting updated info from TheTVDB "+ (useMirror ? "MIRROR " : "")
-							+"for TV show " + seriesToUpdate.get(i).getName() +" ["+ (i+1) +"/"+ (seriesToUpdate.size()) +"]");
-						dialogMsg = seriesToUpdate.get(i).getName() + "\u2026";
+						TVShowItem item = seriesToUpdate.get(i);
+						boolean isMovie = item.getMediaType() == 1;
+						Log.d(SQLiteStore.TAG, "Getting updated info from "+ (isMovie ? "TMDB" : "TVMaze")
+							+" for "+ (isMovie ? "movie " : "TV show ") + item.getName() +" ["+ (i+1) +"/"+ (seriesToUpdate.size()) +"]");
+						dialogMsg = item.getName() + "\u2026";
 						updateAllSeriesPD.incrementProgressBy(1);
 						runOnUiThread(updateMessage);
-						Serie sToUpdate = theTVDB.getSerie(seriesToUpdate.get(i).getSerieId(), seriesToUpdate.get(i).getLanguage());
+						Serie sToUpdate = null;
+						if (isMovie) {
+							if (apiKey != null && !apiKey.isEmpty())
+								sToUpdate = tmdb.getMovie(item.getSerieId());
+						} else {
+							String tvmazeId = resolveTvmazeId(tvMaze, item.getSerieId());
+							if (tvmazeId != null && !tvmazeId.isEmpty()) {
+								sToUpdate = getTVMazeShow(tvMaze, tvmazeId);
+								if (sToUpdate != null) {	// keep the existing DB row; TVMaze id goes to tvmazeId
+									sToUpdate.setId(item.getSerieId());
+									sToUpdate.setTvmazeId(tvmazeId);
+								}
+							}
+						}
 						if (sToUpdate == null) {
 							updatesFailed += dialogMsg +" ";
 						} else {
 							try {
-								if (!db.updateSerie(sToUpdate, latestSeasonOption == UPDATE_LATEST_SEASON_ONLY)) {
+								boolean lastSeasonOnly = !isMovie && latestSeasonOption == UPDATE_LATEST_SEASON_ONLY;
+								if (!db.updateSerie(sToUpdate, lastSeasonOnly)) {
 									Looper.prepare();	// Threads don't have a message loop
 									String error = getString(R.string.messages_error_dbupdate) +" "+ sToUpdate.getSerieName();
 									Log.e(SQLiteStore.TAG, error);
 									Toast.makeText(getApplicationContext(), error, Toast.LENGTH_LONG).show();
 									Looper.loop();
 								}
-								updatePosterThumb(seriesToUpdate.get(i).getSerieId(), sToUpdate);
+								updatePosterThumb(item.getSerieId(), sToUpdate);
 							} catch (Exception e) {
 								e.printStackTrace();
 							}
 						}
+						sleepQuietly(600);
 					}
 					if (updatesFailed.length() > 0) {
 						final String updatesFailedResult = updatesFailed;
@@ -1467,7 +1680,6 @@ public class DroidShows extends ListActivity
 					}
 					updateShowStats();
 					updateAllSeriesPD.dismiss();
-					theTVDB = null;
 				}
 			};
 			updateAllSeriesPD = new ProgressDialog(this);
@@ -1529,21 +1741,22 @@ public class DroidShows extends ListActivity
 			asyncInfo.cancel(true);
 		try {
 			if (!logMode) {
-				List<String> ids = db.getSeries(showArchive, filterNetworks, networks);
+				List<String> ids = db.getSeries(showArchive, filterNetworks, networks, mediaType);
 				series.clear();
 				seriesAdapter.notifyDataSetChanged();
 				for (int i = 0; i < ids.size(); i++)
 					series.add(db.createTVShowItem(ids.get(i)));
 			} else {
-				List<TVShowItem> episodes = db.getLog();
+				List<TVShowItem> episodes = db.getLog(0, mediaType);
 				series.clear();
 				seriesAdapter.notifyDataSetChanged();
 				for (int i = 0; i < episodes.size(); i++)
 					series.add(episodes.get(i));
 			}
-			setTitle(getString(R.string.layout_app_name)
-					+ (!logMode ? (showArchive == 1 ? " - "+ getString(R.string.archive) : "") :
-						" - "+ getString(R.string.menu_log)));
+			String mediaTitle = (mediaType == 1 ? getString(R.string.media_movies) : getString(R.string.media_tv_shows));
+			String modeTitle = (!logMode ? (showArchive == 1 ? " - "+ getString(R.string.mode_finished) : "") :
+					" - "+ getString(R.string.menu_log));
+			setTitle(getString(R.string.layout_app_name) +" - "+ mediaTitle + modeTitle);
 			runOnUiThread(updateListView);
 		} catch (Exception e) {
 			Log.e(SQLiteStore.TAG, "Error populating TVShowItems or no shows added yet");
@@ -1557,7 +1770,7 @@ public class DroidShows extends ListActivity
 	}
 
 	public void getNextLogged() {
-		List<TVShowItem> episodes = db.getLog(series.size());
+		List<TVShowItem> episodes = db.getLog(series.size(), mediaType);
 		for (int i = 0; i < episodes.size(); i++)
 			series.add(episodes.get(i));
 		seriesAdapter.notifyDataSetChanged();
@@ -1624,7 +1837,6 @@ public class DroidShows extends ListActivity
 		ed.putString(LANGUAGE_CODE_NAME, langCode);
 		ed.putBoolean(SHOW_NEXT_AIRING, showNextAiring);
 		ed.putBoolean(MARK_FROM_LAST_WATCHED, markFromLastWatched);
-		ed.putBoolean(USE_MIRROR, useMirror);
 		ed.putString(PINNED_SHOWS_NAME, pinnedShows.toString());
 		ed.putBoolean(FILTER_NETWORKS_NAME, filterNetworks);
 		ed.putString(NETWORKS_NAME, networks.toString());
@@ -1633,7 +1845,9 @@ public class DroidShows extends ListActivity
 
 	@Override
 	protected void onStop() {
-		if (autoBackup && theTVDB == null && asyncInfo.getStatus() != AsyncTask.Status.RUNNING)	// not updating
+		boolean updating = (updateShowTh != null && updateShowTh.isAlive())
+			|| (updateAllShowsTh != null && updateAllShowsTh.isAlive());
+		if (autoBackup && !updating && asyncInfo.getStatus() != AsyncTask.Status.RUNNING)	// not updating
 			backup(true);
 		super.onStop();
 	}
@@ -1752,6 +1966,7 @@ public class DroidShows extends ListActivity
 	protected void onSaveInstanceState(Bundle outState) {
 		outState.putBoolean("searching", searching());
 		outState.putInt("showArchive", showArchive);
+		outState.putInt("mediaType", mediaType);
 		if (m_ProgressDialog != null)
 			m_ProgressDialog.dismiss();
 		super.onSaveInstanceState(outState);

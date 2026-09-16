@@ -38,6 +38,8 @@ public class Serie {
     private String posterInCache = "";
     private String posterThumb = "";
     private int passiveStatus = 0;
+    private int mediaType = 0;
+    private String tvmazeId = "";
 
     public String getId() {
         return id;
@@ -255,6 +257,22 @@ public class Serie {
         this.passiveStatus = passiveStatus;
     }
 
+    public int getMediaType() {
+        return mediaType;
+    }
+
+    public void setMediaType(int mediaType) {
+        this.mediaType = mediaType;
+    }
+
+    public String getTvmazeId() {
+        return tvmazeId;
+    }
+
+    public void setTvmazeId(String tvmazeId) {
+        this.tvmazeId = tvmazeId;
+    }
+
     public boolean saveToDB(SQLiteStore SQLS) {
         try{
             for(int a=0; a < this.actors.size(); a++){
@@ -279,13 +297,14 @@ public class Serie {
             SQLS.execQuery("INSERT INTO series (id, serieId, language, serieName, banner, overview, "+
                            "firstAired, imdbId, zap2ItId, airsDayOfWeek, airsTime, contentRating, "+
                            "network, rating, runtime, status, fanart, lastUpdated, poster, "+
-                           "posterInCache, posterThumb, passiveStatus) VALUES ('"+ this.id +"','"+ this.serieId +"','"+ this.language
+                           "posterInCache, posterThumb, passiveStatus, mediaType, tvmazeId) VALUES ('"+ this.id +"','"+ this.serieId +"','"+ this.language
                            +"',"+ DatabaseUtils.sqlEscapeString(this.serieName) +",'"+ this.banner
                            +"',"+ DatabaseUtils.sqlEscapeString(this.overview) +",'"+ this.firstAired
                            +"','"+ this.imdbId +"','"+ this.zap2ItId +"','"+ this.airsDayOfWeek +"','"+ this.airsTime
                            +"','"+ this.contentRating +"','"+ this.network +"','"+ this.rating +"','"+ this.runtime
                            +"','"+ this.status +"','"+ this.fanart +"','"+ this.lastUpdated +"','"+ this.poster
-                           +"','"+ this.posterInCache +"','"+ this.posterThumb +"', '"+ this.passiveStatus +"');");
+                           +"','"+ this.posterInCache +"','"+ this.posterThumb +"', '"+ this.passiveStatus
+                           +"','"+ this.mediaType +"','"+ this.tvmazeId +"');");
 
             for(int e=0; e < this.episodes.size(); e++) {
                 this.episodes.get(e).setSeriesId(this.id);

@@ -11,8 +11,7 @@ import java.util.List;
 
 import nl.asymmetrics.droidshows.DroidShows;
 import nl.asymmetrics.droidshows.R;
-import nl.asymmetrics.droidshows.provider.JsonFetcher;
-import nl.asymmetrics.droidshows.provider.TVMaze;
+import nl.asymmetrics.droidshows.provider.TMDB;
 import nl.asymmetrics.droidshows.thetvdb.model.Serie;
 import nl.asymmetrics.droidshows.thetvdb.model.TVShowItem;
 import nl.asymmetrics.droidshows.utils.SQLiteStore;
@@ -49,34 +48,41 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 
 import org.apache.commons.io.FileUtils;
 
-public class AddSerie extends ListActivity
+public class AddMovie extends ListActivity
 {
-	private static List<Serie> search_series = null;
-	private TVMaze tvMaze;
-	private SeriesSearchAdapter seriessearch_adapter;
+	private static List<Serie> search_movies = null;
+	private TMDB tmdb;
+	private MovieSearchAdapter moviesearch_adapter;
 	/* DIALOGS */
 	private ProgressDialog m_ProgressDialog = null;
 	/* Option Menus */
-	private static final int ADD_SERIE_MENU_ITEM = Menu.FIRST;
+	private static final int ADD_MOVIE_MENU_ITEM = Menu.FIRST;
 	/* Context Menus */
 	private static final int ADD_CONTEXT = Menu.FIRST;
 	private ListView listView;
 	private Utils utils = new Utils();
 	static String searchQuery = "";
 	private SQLiteStore db;
-	private List<String> series;
-	private AsyncAddSerie addSerieTask = null;
-	private Serie sToAdd;
-	
+	private List<String> movies;
+	private String apiKey = "";
+	private AsyncAddMovie addMovieTask = null;
+	private Serie mToAdd;
+
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.add_serie);
+		setContentView(R.layout.add_movie);
 		db = SQLiteStore.getInstance(this);
-		series = db.getSeries(2, false, null, 0);	// 2 = archive and current shows, false = don't filter networks, null = ignore networks filter, 0 = TV shows only
-		List<Serie> search_series = new ArrayList<Serie>();
-		this.seriessearch_adapter = new SeriesSearchAdapter(this, R.layout.row_search_series, search_series);
-		setListAdapter(seriessearch_adapter);
+		movies = db.getSeries(2, false, null, 1);	// 2 = archive and current, false = don't filter networks, null = ignore networks filter, 1 = movies only
+		List<Serie> search_movies = new ArrayList<Serie>();
+		this.moviesearch_adapter = new MovieSearchAdapter(this, R.layout.row_search_movies, search_movies);
+		setListAdapter(moviesearch_adapter);
+		apiKey = getSharedPreferences("DroidShowsPref", 0).getString(DroidShows.TMDB_API_KEY_NAME, "");
+		if (apiKey == null || apiKey.length() == 0) {
+			((TextView) findViewById(R.id.add_movie_title)).setText(R.string.tmdb_key_required);
+			Toast.makeText(getApplicationContext(), R.string.tmdb_key_missing, Toast.LENGTH_LONG).show();
+			return;
+		}
 		Intent intent = getIntent();
 		getSearchResults(intent);
 	}
@@ -84,14 +90,14 @@ public class AddSerie extends ListActivity
 	/* Options Menu */
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(android.R.drawable.ic_menu_add);
+		menu.add(0, ADD_MOVIE_MENU_ITEM, 0, getString(R.string.menu_add_movie)).setIcon(android.R.drawable.ic_menu_add);
 		return super.onCreateOptionsMenu(menu);
 	}
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
-			case ADD_SERIE_MENU_ITEM :
+			case ADD_MOVIE_MENU_ITEM :
 				onSearchRequested();
 				break;
 		}
@@ -101,161 +107,144 @@ public class AddSerie extends ListActivity
 	/* context menu */
 	public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
 		super.onCreateContextMenu(menu, v, menuInfo);
-		menu.add(0, ADD_CONTEXT, 0, getString(R.string.menu_context_add_serie));
+		menu.add(0, ADD_CONTEXT, 0, getString(R.string.menu_add_movie));
 	}
 
 	public boolean onContextItemSelected(MenuItem item) {
 		final AdapterContextMenuInfo info = (AdapterContextMenuInfo) item.getMenuInfo();
-		final ListView serieList = getListView();
+		final ListView movieList = getListView();
 		switch (item.getItemId()) {
 			case ADD_CONTEXT :
-				final Serie tmpSerie = (Serie) serieList.getAdapter().getItem(info.position);
-				addSerie(tmpSerie);
+				final Serie tmpMovie = (Serie) movieList.getAdapter().getItem(info.position);
+				addMovie(tmpMovie);
 				return true;
 			default :
 				return super.onContextItemSelected(item);
 		}
 	}
-	private Runnable loadSearchSeries = new Runnable() {
+	private Runnable loadSearchMovies = new Runnable() {
 		public void run() {
-			seriessearch_adapter.clear();
-			if (search_series != null && search_series.size() > 0) {
-				for (int i = 0; i < search_series.size(); i++)
-					seriessearch_adapter.add(search_series.get(i));
+			moviesearch_adapter.clear();
+			if (search_movies != null && search_movies.size() > 0) {
+				for (int i = 0; i < search_movies.size(); i++)
+					moviesearch_adapter.add(search_movies.get(i));
 			}
-			seriessearch_adapter.notifyDataSetChanged();
+			moviesearch_adapter.notifyDataSetChanged();
 			m_ProgressDialog.dismiss();
 		}
 	};
 
-	private void searchSeries(String searchQuery) {
+	private void searchMovies(String searchQuery) {
 		try {
-			search_series = new ArrayList<Serie>();
-			search_series = searchWithRetry(searchQuery);
-			if (search_series == null) {
+			search_movies = new ArrayList<Serie>();
+			search_movies = tmdb.searchMovies(searchQuery);
+			if (search_movies == null) {
 				m_ProgressDialog.dismiss();
 				Looper.prepare();
-					Toast.makeText(getApplicationContext(), R.string.messages_thetvdb_con_error, Toast.LENGTH_LONG).show();
+					Toast.makeText(getApplicationContext(), R.string.messages_tmdb_con_error, Toast.LENGTH_LONG).show();
 				Looper.loop();
 			} else {
-				runOnUiThread(loadSearchSeries);
+				runOnUiThread(loadSearchMovies);
 			}
 		} catch (Exception e) {
 			Log.e(SQLiteStore.TAG, e.getMessage());
 		}
 	}
 
-	/* Search TVMaze, retrying once after 10s when the API answers HTTP 429. */
-	private List<Serie> searchWithRetry(String query) {
-		try {
-			return tvMaze.searchShows(query);
-		} catch (JsonFetcher.RateLimitException e) {
-			Log.d(SQLiteStore.TAG, "TVMaze rate limited, retrying search in 10s");
-			try { Thread.sleep(10000); } catch (InterruptedException ie) {}
-			try {
-				return tvMaze.searchShows(query);
-			} catch (JsonFetcher.RateLimitException e2) {
-				Log.e(SQLiteStore.TAG, "TVMaze still rate limited for search");
-				return null;
-			}
-		}
-	}
-
 	private void Search() {
-		m_ProgressDialog = ProgressDialog.show(AddSerie.this, getString(R.string.messages_title_search_series), getString(R.string.messages_search_series), true, true);
+		m_ProgressDialog = ProgressDialog.show(AddMovie.this, getString(R.string.messages_title_search_movies), getString(R.string.messages_search_movies), true, true);
 		new Thread(new Runnable() {
 			public void run() {
-				tvMaze = new TVMaze();
-				searchSeries(searchQuery);
+				tmdb = new TMDB(apiKey);
+				searchMovies(searchQuery);
 			}
 		}).start();
 	}
 
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
-		m_ProgressDialog.dismiss();
+		if (m_ProgressDialog != null) m_ProgressDialog.dismiss();
 		super.onSaveInstanceState(outState);
 	}
-	
-	private void addSerie(Serie s) {
-		if (addSerieTask == null || addSerieTask.getStatus() != AsyncTask.Status.RUNNING) {
-			addSerieTask = new AsyncAddSerie();
-			addSerieTask.execute(s);
+
+	private void addMovie(Serie s) {
+		if (addMovieTask == null || addMovieTask.getStatus() != AsyncTask.Status.RUNNING) {
+			addMovieTask = new AsyncAddMovie();
+			addMovieTask.execute(s);
 		} else {
 			Log.d(SQLiteStore.TAG, "Still busy, not adding "+ s.getSerieName());
 			Toast.makeText(getApplicationContext(), R.string.messages_error_dbupdate, Toast.LENGTH_SHORT).show();
 		}
 	}
 
-	private class AsyncAddSerie extends AsyncTask<Serie, Void, Boolean> {
+	private class AsyncAddMovie extends AsyncTask<Serie, Void, Boolean> {
 		String msg = null;
-		
+
 		@Override
 		protected void onPreExecute() {
 			super.onPreExecute();
-			m_ProgressDialog = ProgressDialog.show(AddSerie.this, getString(R.string.messages_title_adding_serie), getString(R.string.messages_adding_serie), true, false);
+			m_ProgressDialog = ProgressDialog.show(AddMovie.this, getString(R.string.messages_title_adding_movie), getString(R.string.messages_adding_movie), true, false);
 		}
 
 		protected Boolean doInBackground(Serie... params) {
 			Serie s = params[0];
 			Boolean success = false;
-			
+
 			boolean alreadyExists = false;
-			for (String serieId : series)
-				if (serieId.equals(s.getId()) || s.getId().equals(db.getTvmazeId(serieId))) {
+			for (String movieId : movies)
+				if (movieId.equals(s.getId())) {
 					alreadyExists = true;
 					break;
 				}
 			if (alreadyExists) return false;
-			
-			if (tvMaze == null)
-				tvMaze = new TVMaze();
-			sToAdd = getShowWithRetry(tvMaze, s.getId());
-			if (sToAdd == null) {
-				msg = getString(R.string.messages_thetvdb_con_error);
+
+			mToAdd = tmdb.getMovie(s.getId());
+			if (mToAdd == null) {
+				msg = getString(R.string.messages_tmdb_con_error);
 			} else {
 				addPosterThumb();
 				try {
-					Log.d(SQLiteStore.TAG, "Adding "+ sToAdd.getSerieName() +": saving TV show to database");
-					sToAdd.setPassiveStatus((DroidShows.showArchive == 1 ? 1 : 0));
-					sToAdd.saveToDB(db);
-					Log.d(SQLiteStore.TAG, "Adding "+ sToAdd.getSerieName() +": creating the TV show item");
-					int nseasons = db.getSeasonCount(sToAdd.getId());
-					SQLiteStore.NextEpisode nextEpisode = db.getNextEpisode(sToAdd.getId());
-					int unwatchedAired = db.getEpsUnwatchedAired(sToAdd.getId());
-					int unwatched = db.getEpsUnwatched(sToAdd.getId());
+					Log.d(SQLiteStore.TAG, "Adding "+ mToAdd.getSerieName() +": saving movie to database");
+					mToAdd.setPassiveStatus((DroidShows.showArchive == 1 ? 1 : 0));
+					mToAdd.saveToDB(db);
+					Log.d(SQLiteStore.TAG, "Adding "+ mToAdd.getSerieName() +": creating the movie item");
+					int nseasons = db.getSeasonCount(mToAdd.getId());
+					SQLiteStore.NextEpisode nextEpisode = db.getNextEpisode(mToAdd.getId());
+					int unwatchedAired = db.getEpsUnwatchedAired(mToAdd.getId());
+					int unwatched = db.getEpsUnwatched(mToAdd.getId());
 					String nextEpisodeStr = db.getNextEpisodeString(nextEpisode, DroidShows.showNextAiring && 0 < unwatchedAired && unwatchedAired < unwatched);
-					Drawable d = Drawable.createFromPath(sToAdd.getPosterThumb());
-					TVShowItem tvsi = new TVShowItem(sToAdd.getId(), sToAdd.getLanguage(), sToAdd.getPosterThumb(), d, sToAdd.getSerieName(), nseasons,
-						nextEpisodeStr, nextEpisode.firstAiredDate, unwatchedAired, unwatched, sToAdd.getPassiveStatus() == 1,
-						(sToAdd.getStatus() == null ? "null" : sToAdd.getStatus()), "");
+					Drawable d = Drawable.createFromPath(mToAdd.getPosterThumb());
+					TVShowItem tvsi = new TVShowItem(mToAdd.getId(), mToAdd.getLanguage(), mToAdd.getPosterThumb(), d, mToAdd.getSerieName(), nseasons,
+						nextEpisodeStr, nextEpisode.firstAiredDate, unwatchedAired, unwatched, mToAdd.getPassiveStatus() == 1,
+						(mToAdd.getStatus() == null ? "null" : mToAdd.getStatus()), "");
+					tvsi.setMediaType(1);
 					DroidShows.series.add(tvsi);
-					series.add(sToAdd.getId());
+					movies.add(mToAdd.getId());
 					runOnUiThread(DroidShows.updateListView);
 					success = true;
 				} catch (Exception e) {
-					Log.e(SQLiteStore.TAG, "Error adding "+ sToAdd.getSerieName());
+					Log.e(SQLiteStore.TAG, "Error adding "+ mToAdd.getSerieName());
 				}
 				if (success) {
-					msg = String.format(getString(R.string.messages_series_success), sToAdd.getSerieName())
+					msg = String.format(getString(R.string.messages_movie_success), mToAdd.getSerieName())
 						+ (DroidShows.showArchive == 1 ? " ("+ getString(R.string.messages_context_archived) +")": "");
 				}
 			}
-			sToAdd = null;
+			mToAdd = null;
 			return success;
 		}
-		
+
 		private void addPosterThumb() {
-			Log.d(SQLiteStore.TAG, "Adding "+ sToAdd.getSerieName() +": getting the poster");
+			Log.d(SQLiteStore.TAG, "Adding "+ mToAdd.getSerieName() +": getting the poster");
 			// get the poster and save it in cache
-			String poster = sToAdd.getPoster();
+			String poster = mToAdd.getPoster();
 			URL posterURL = null;
 			String posterThumbPath = null;
 			try {
 				posterURL = new URL(poster);
 				posterThumbPath = getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs"+ posterURL.getFile().toString();
 			} catch (MalformedURLException e) {
-				Log.e(SQLiteStore.TAG, sToAdd.getSerieName() +" doesn't have a poster URL");
+				Log.e(SQLiteStore.TAG, mToAdd.getSerieName() +" doesn't have a poster URL");
 				e.printStackTrace();
 				return;
 			}
@@ -283,8 +272,8 @@ public class AddSerie extends ListActivity
 				resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, fOut);
 				fOut.flush();
 				fOut.close();
-				sToAdd.setPosterInCache("true");
-				sToAdd.setPosterThumb(posterThumbPath);
+				mToAdd.setPosterInCache("true");
+				mToAdd.setPosterThumb(posterThumbPath);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -298,7 +287,7 @@ public class AddSerie extends ListActivity
 		@Override
 		protected void onPostExecute(Boolean result) {
 			super.onPostExecute(result);
-			seriessearch_adapter.notifyDataSetChanged();
+			moviesearch_adapter.notifyDataSetChanged();
 			if (msg != null) Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();
 			m_ProgressDialog.dismiss();
 		}
@@ -309,7 +298,7 @@ public class AddSerie extends ListActivity
 			super.onCancelled();
 		}
 	}
-	
+
 	// Guillaume: searches from within this activity were discarded
 	@Override
 	protected void onNewIntent(Intent intent) {
@@ -318,23 +307,12 @@ public class AddSerie extends ListActivity
 
 	private void getSearchResults(Intent intent) {
 		if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
-			// Movies tab searches go to AddMovie instead
-			if (DroidShows.mediaType == 1) {
-				String query = intent.getStringExtra(SearchManager.QUERY);
-				Intent i = new Intent(this, AddMovie.class);
-				i.setAction(Intent.ACTION_SEARCH);
-				if (query != null)
-					i.putExtra(SearchManager.QUERY, query);
-				startActivity(i);
-				finish();
-				return;
-			}
 			searchQuery = intent.getStringExtra(SearchManager.QUERY);
 			if (searchQuery == null || searchQuery.length() == 0) {
 				onSearchRequested();
 				return;
 			}
-			TextView title = (TextView) findViewById(R.id.add_serie_title);
+			TextView title = (TextView) findViewById(R.id.add_movie_title);
 			title.setText(getString(R.string.dialog_search) + " " + searchQuery);
 			doSearch();
 		}
@@ -342,41 +320,29 @@ public class AddSerie extends ListActivity
 		listView.setOnTouchListener(new SwipeDetect());
 		registerForContextMenu(getListView());
 	}
-	
+
 	private void doSearch() {
-		if (utils.isNetworkAvailable(AddSerie.this))
+		if (apiKey == null || apiKey.length() == 0) {
+			Toast.makeText(getApplicationContext(), R.string.tmdb_key_missing, Toast.LENGTH_LONG).show();
+			return;
+		}
+		if (utils.isNetworkAvailable(AddMovie.this))
 			Search();
 		else
 			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
 	}
 
-	/* Fetch a full TVMaze show, retrying once after 10s on HTTP 429. */
-	private Serie getShowWithRetry(TVMaze tvMaze, String tvmazeId) {
-		try {
-			return tvMaze.getShow(tvmazeId);
-		} catch (JsonFetcher.RateLimitException e) {
-			Log.d(SQLiteStore.TAG, "TVMaze rate limited, retrying in 10s");
-			try { Thread.sleep(10000); } catch (InterruptedException ie) {}
-			try {
-				return tvMaze.getShow(tvmazeId);
-			} catch (JsonFetcher.RateLimitException e2) {
-				Log.e(SQLiteStore.TAG, "TVMaze still rate limited for show "+ tvmazeId);
-				return null;
-			}
-		}
-	}
-	
 	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id) {
-		final Serie sToAdd = AddSerie.search_series.get(position);
+		final Serie mToAdd = AddMovie.search_movies.get(position);
 		AlertDialog sOverview = new AlertDialog.Builder(this)
 		.setIcon(R.drawable.icon)
-		.setTitle(sToAdd.getSerieName())
-		.setMessage(sToAdd.getOverview())
-		.setPositiveButton(getString(R.string.menu_context_add_serie), new DialogInterface.OnClickListener() {
+		.setTitle(mToAdd.getSerieName())
+		.setMessage(mToAdd.getOverview())
+		.setPositiveButton(getString(R.string.menu_add_movie), new DialogInterface.OnClickListener() {
 			public void onClick(DialogInterface dialog, int id) {
 				dialog.dismiss();
-				addSerie(sToAdd);
+				addMovie(mToAdd);
 			}
 		})
 		.setNegativeButton(getString(R.string.dialog_cancel), new DialogInterface.OnClickListener() {
@@ -385,41 +351,43 @@ public class AddSerie extends ListActivity
 			}
 		})
 		.show();
-		
-		for (String serieId : series)
-			if (serieId.equals(sToAdd.getId())) {
+
+		for (String movieId : movies)
+			if (movieId.equals(mToAdd.getId())) {
 				sOverview.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
 				break;
 			}
 	}
-	
-	private class SeriesSearchAdapter extends ArrayAdapter<Serie>
+
+	private class MovieSearchAdapter extends ArrayAdapter<Serie>
 	{
 		private List<Serie> items;
 
-		public SeriesSearchAdapter(Context context, int textViewResourceId, List<Serie> series) {
-			super(context, textViewResourceId, series);
-			this.items = series;
+		public MovieSearchAdapter(Context context, int textViewResourceId, List<Serie> movies) {
+			super(context, textViewResourceId, movies);
+			this.items = movies;
 		}
 
 		public View getView(int position, View convertView, ViewGroup parent) {
 			View v = convertView;
 			if (v == null) {
 				LayoutInflater vi = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-				v = vi.inflate(R.layout.row_search_series, parent, false);
+				v = vi.inflate(R.layout.row_search_movies, parent, false);
 			}
 			final Serie o = items.get(position);
 			if (o != null) {
 				TextView sn = (TextView) v.findViewById(R.id.seriename);
 				CheckedTextView ctv = (CheckedTextView) v.findViewById(R.id.addserieBtn);
 				if (sn != null) {
-					String lang = (o.getLanguage() == null ? "" : " ("+ o.getLanguage() +")");
-					sn.setText(o.getSerieName() + lang);
+					String year = "";
+					if (o.getFirstAired() != null && o.getFirstAired().length() >= 4)
+						year = " ("+ o.getFirstAired().substring(0, 4) +")";
+					sn.setText(o.getSerieName() + year);
 				}
 				if (ctv != null) {
 					boolean alreadyExists = false;
-					for (String serieId : series) {
-						if (serieId.equals(o.getId())) {
+					for (String movieId : movies) {
+						if (movieId.equals(o.getId())) {
 							alreadyExists = true;
 							break;
 						}
@@ -438,7 +406,7 @@ public class AddSerie extends ListActivity
 						ctv.setCheckMarkDrawable(getResources().getDrawable(R.drawable.add));
 						ctv.setOnClickListener(new OnClickListener() {
 							public void onClick(View v) {
-								addSerie(o);
+								addMovie(o);
 							}
 						});
 					}

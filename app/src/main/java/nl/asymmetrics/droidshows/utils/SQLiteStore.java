@@ -117,9 +117,9 @@ public class SQLiteStore extends SQLiteOpenHelper
 	/* Get Methods */
 	public TVShowItem createTVShowItem(String serieId) {
 		String name = "", language = "", tmpPoster = "", showStatus = "", tmpNextEpisode = "", nextEpisode = "", tmpNextAir = "", extResources = "";
-		int tmpStatus = 0, seasonCount = 0, unwatched = 0, unwatchedAired = 0;
+		int tmpStatus = 0, seasonCount = 0, unwatched = 0, unwatchedAired = 0, mediaType = 0;
 		Date nextAir = null;
-		Cursor c = Query("SELECT serieName, language, posterThumb, status, passiveStatus, seasonCount, unwatchedAired, unwatched, nextEpisode, nextAir, extResources FROM series WHERE id = '" + serieId + "'");
+		Cursor c = Query("SELECT serieName, language, posterThumb, status, passiveStatus, seasonCount, unwatchedAired, unwatched, nextEpisode, nextAir, extResources, mediaType FROM series WHERE id = '" + serieId + "'");
 		try {
 			c.moveToFirst();
 			if (c != null && c.isFirst()) {
@@ -134,6 +134,10 @@ public class SQLiteStore extends SQLiteOpenHelper
 				tmpNextEpisode = c.getString(c.getColumnIndex("nextEpisode"));
 				tmpNextAir = c.getString(c.getColumnIndex("nextAir"));
 				extResources = c.getString(c.getColumnIndex("extResources"));
+				int mediaTypeCol = c.getColumnIndex("mediaType");
+				if (mediaTypeCol != -1) {
+					mediaType = c.getInt(mediaTypeCol);
+				}
 			}
 		} catch (SQLiteException e) {
 			Log.e(TAG, e.getMessage());
@@ -150,6 +154,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		}
 		boolean status = (tmpStatus == 1);
 		TVShowItem tvsi = new TVShowItem(serieId, language, tmpPoster, null, name, seasonCount, nextEpisode, nextAir, unwatchedAired, unwatched, status, showStatus, extResources);
+		tvsi.setMediaType(mediaType);
 		return tvsi;
 	}
 
@@ -262,6 +267,10 @@ public class SQLiteStore extends SQLiteOpenHelper
 	}
 
 	public List<String> getSeries(int showArchive, boolean filterNetworks, List<String> showNetworks) {
+		return getSeries(showArchive, filterNetworks, showNetworks, 2);
+	}
+
+	public List<String> getSeries(int showArchive, boolean filterNetworks, List<String> showNetworks, int mediaType) {
 		String networks = null;
 		if (filterNetworks && showNetworks != null && !showNetworks.isEmpty()) {
 			networks = "(";
@@ -274,10 +283,14 @@ public class SQLiteStore extends SQLiteOpenHelper
 		List<String> series = new ArrayList<String>();
 		String showArchiveString = (showArchive < 2 ? " WHERE (passiveStatus"
 			+ (showArchive == 0 ? "=0 OR passiveStatus IS NULL)" : ">=1)") : "");	// Solves issue with former bug when adding show directly after restoring backup
-		String showNetworksString = (networks != null ? (showArchiveString == null ? " WHERE " : " AND ")
+		boolean hasWhere = !showArchiveString.isEmpty();
+		String showNetworksString = (networks != null ? (hasWhere ? " AND " : " WHERE ")
 			+"network IN "+ networks : "");
-//		Log.d(TAG, "SELECT id FROM series"+ showArchiveString + showNetworksString);
-		Cursor cseries = Query("SELECT id FROM series"+ showArchiveString + showNetworksString);
+		hasWhere = hasWhere || !showNetworksString.isEmpty();
+		String mediaTypeString = (mediaType < 2 ? (hasWhere ? " AND " : " WHERE ")
+			+"mediaType="+ mediaType : "");
+//		Log.d(TAG, "SELECT id FROM series"+ showArchiveString + showNetworksString + mediaTypeString);
+		Cursor cseries = Query("SELECT id FROM series"+ showArchiveString + showNetworksString + mediaTypeString);
 		try {
 			cseries.moveToFirst();
 			if (cseries != null && cseries.isFirst()) {
@@ -316,12 +329,18 @@ public class SQLiteStore extends SQLiteOpenHelper
 	}
 
 	public List<TVShowItem> getLog(int offset) {
+		return getLog(offset, 2);
+	}
+
+	public List<TVShowItem> getLog(int offset, int mediaType) {
 		List<TVShowItem> episodes = new ArrayList<TVShowItem>();
 		String serieId = "", episodeId = "", episodeName = "";
 		long seen;
 		int seasonNumber = -1, episodeNumber = -1;
-		Cursor c = Query("SELECT serieId, id, seasonNumber, episodeNumber, episodeName, seen"
-								+" FROM episodes WHERE seen>1 ORDER BY seen DESC, serieId DESC, episodeNumber"
+		Cursor c = Query("SELECT episodes.serieId, episodes.id, episodes.seasonNumber, episodes.episodeNumber, episodes.episodeName, episodes.seen"
+								+" FROM episodes JOIN series ON episodes.serieId = series.id WHERE episodes.seen>1"
+								+ (mediaType < 2 ? " AND series.mediaType="+ mediaType : "")
+								+" ORDER BY episodes.seen DESC, episodes.serieId DESC, episodes.episodeNumber"
 								+" DESC LIMIT 25 OFFSET "+ offset);
 		c.moveToFirst();
 		if (c != null && c.isFirst()) {
@@ -778,6 +797,30 @@ public class SQLiteStore extends SQLiteOpenHelper
 		}
 	}
 
+	public String getTvmazeId(String serieId) {
+		String tvmazeId = "";
+		Cursor c = Query("SELECT tvmazeId FROM series WHERE id='"+ serieId +"'");
+		try {
+			c.moveToFirst();
+			if (c != null && c.isFirst()) {
+				tvmazeId = c.getString(0);
+			}
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+			tvmazeId = "";
+		}
+		if (c != null) c.close();
+		return tvmazeId == null ? "" : tvmazeId;
+	}
+
+	public void setTvmazeId(String serieId, String tvmazeId) {
+		try {
+			db.execSQL("UPDATE series SET tvmazeId='"+ tvmazeId +"' WHERE id='"+ serieId +"'");
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+	}
+
 	public boolean updateSerie(Serie s, boolean last_season) {
 		if (s == null) {
 			Log.e(TAG, "Error: Serie is null");
@@ -1038,7 +1081,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 	public void onCreate(SQLiteDatabase dbase) {
 		try {
 			dbase.execSQL("CREATE TABLE IF NOT EXISTS droidseries (version VARCHAR);");
-			dbase.execSQL("INSERT INTO droidseries (version) VALUES ('0.1.5-7G3');");
+			dbase.execSQL("INSERT INTO droidseries (version) VALUES ('0.1.5-7G4');");
 			// tabela dos directors
 			dbase.execSQL("CREATE TABLE IF NOT EXISTS directors (serieId VARCHAR, episodeId VARCHAR, director VARCHAR);");
 			// tabela dos guestStars
@@ -1069,7 +1112,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 				+"fanart VARCHAR, lastUpdated VARCHAR, passiveStatus INTEGER DEFAULT 0, poster VARCHAR, "
 				+"posterInCache VARCHAR, posterThumb VARCHAR, "
 				+"seasonCount INTEGER, unwatchedAired INTEGER, unwatched INTEGER, nextEpisode VARCHAR, nextAir VARCHAR, "
-				+"extResources VARCHAR NOT NULL DEFAULT '');");
+				+"extResources VARCHAR NOT NULL DEFAULT '', mediaType INTEGER DEFAULT 0, tvmazeId VARCHAR DEFAULT '');");
 		} catch (SQLiteException e) {
 			Log.e(TAG, e.getMessage());
 		}
@@ -1081,7 +1124,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 	}
 	
 	public void updateShowStats() {
-		List<String> series = getSeries(2, false, null);	// 2 = archive and current shows, false = don't filter networks, null = ignore networks filter
+		List<String> series = getSeries(2, false, null, 2);	// 2 = archive and current shows, false = don't filter networks, null = ignore networks filter, 2 = all media types
 		for (int i = 0; i < series.size(); i += 1)
 			updateShowStats(series.get(i));
 	}

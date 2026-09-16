@@ -5,7 +5,7 @@
 <string name="layout_main_no_items">No shows found.</string>
 <string name="layout_search_no_items">No shows found.</string>
 <string name="layout_seasons_no_items">No seasons to display.</string>
-<string name="archive">Archive</string>
+<string name="archive">Finished</string>
 <string name="addserie_hint">Show to add…</string>
 <string name="search_hint">Search…</string>
 <string name="menu_filter">Filter shows</string>
@@ -21,7 +21,7 @@
 <string name="menu_context_updated">updated</string>
 <string name="menu_context_delete">Delete</string>
 <string name="menu_context_add_serie">Add show</string>
-<string name="menu_show_archive">Show archive</string>
+<string name="menu_show_archive">Show finished</string>
 <string name="menu_show_current">Show current</string>
 <string name="menu_exclude_seen">Exclude seen</string>
 <string name="menu_include_seen">Include seen</string>
@@ -79,8 +79,8 @@
 \n&#187; Tap IMDb rating to view in IMDb
 \n&#187; Tap date to add to calendar</string>
 <string name="dialog_networks">Networks</string>
-<string name="menu_archive">Archive</string>
-<string name="menu_unarchive">Recover</string>
+<string name="menu_archive">Move to Finished</string>
+<string name="menu_unarchive">Move back to Watching</string>
 <string name="messages_title_updating_series">Updating shows</string>
 <string name="messages_title_updating_db">Updating database</string>
 <string name="messages_update_serie">Gathering show information…</string>
@@ -110,13 +110,13 @@
 <string name="messsages_view_ep_details">Episode details</string>
 <string name="messsages_edit_seen_timestamp">Edit seen timestamp</string>
 <string name="messages_calendar_app_error">No Calendar app found!</string>
-<string name="messages_thetvdb_con_error">Error connecting to TheTVDB. Try again.</string>
+<string name="messages_thetvdb_con_error">Connection error. Please try again.</string>
 <string name="messages_marked_seen">marked as seen</string>
 <string name="messages_marked_unseen">marked as unseen</string>
 <string name="messages_context_mark_seasonunseen">Mark all episodes as unseen</string>
 <string name="messages_context_mark_asseenuptothis">Seasons up to here are seen</string>
-<string name="messages_context_archived">archived</string>
-<string name="messages_context_unarchived">recovered</string>
+<string name="messages_context_archived">finished</string>
+<string name="messages_context_unarchived">moved back to Watching</string>
 <string name="messages_aired">Aired:</string>
 <string name="messages_at">at</string>
 <string name="messages_of">of</string>
@@ -131,4 +131,23 @@
 <string name="series_actors">Actors:</string>
 <string name="showstatus_continuing">continuing</string>
 <string name="showstatus_ended">ended</string>
+<string name="media_tv_shows">TV Shows</string>
+<string name="media_movies">Movies</string>
+<string name="mode_watching">Watching</string>
+<string name="mode_finished">Finished</string>
+<string name="menu_add_movie">Add movie</string>
+<string name="tmdb_api_key_title">TMDB API key</string>
+<string name="tmdb_api_key_hint">Paste your free TMDB API key (themoviedb.org/settings/api)</string>
+<string name="tmdb_key_required">TMDB API key required</string>
+<string name="tmdb_key_missing">Set your TMDB API key in Settings to search movies</string>
+<string name="messages_tmdb_con_error">TMDB connection error. Please try again.</string>
+<string name="messages_title_search_movies">Search movies</string>
+<string name="messages_search_movies">Searching TMDB…</string>
+<string name="messages_movie_success">Movie %s added</string>
+<string name="messages_title_adding_movie">Adding movie</string>
+<string name="messages_adding_movie">Adding movie…</string>
+<string name="about_credits_tvmaze">TV data by TVmaze (tvmaze.com), CC BY-SA</string>
+<string name="about_credits_tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+<string name="msg_migrating">Migrating library to TVMaze…</string>
+<string name="msg_migrated">Library migrated</string>
 </resources>
