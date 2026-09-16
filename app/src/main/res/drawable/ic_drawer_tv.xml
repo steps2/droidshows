@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outline television set: navigation drawer icon for TV Shows -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+	android:width="24dp" android:height="24dp"
+	android:viewportWidth="24" android:viewportHeight="24">
+	<path
+		android:strokeWidth="1.8" android:strokeColor="#FFFFFF"
+		android:strokeLineCap="round" android:strokeLineJoin="round"
+		android:fillColor="#00000000"
+		android:pathData="M5,8.5h14a1.5,1.5 0 0 1 1.5,1.5v7a1.5,1.5 0 0 1 -1.5,1.5H5a1.5,1.5 0 0 1 -1.5,-1.5v-7A1.5,1.5 0 0 1 5,8.5z" />
+	<path
+		android:strokeWidth="1.8" android:strokeColor="#FFFFFF"
+		android:strokeLineCap="round" android:strokeLineJoin="round"
+		android:fillColor="#00000000"
+		android:pathData="M9.2,8.5L6,5.3M14.8,8.5L18,5.3" />
+	<path
+		android:strokeWidth="1.8" android:strokeColor="#FFFFFF"
+		android:strokeLineCap="round" android:strokeLineJoin="round"
+		android:fillColor="#00000000"
+		android:pathData="M12,18.5v2M8.8,20.5h6.4" />
+</vector>

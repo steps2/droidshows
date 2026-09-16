@@ -3,7 +3,7 @@
 	android:orientation="horizontal" android:layout_width="fill_parent" android:layout_height="wrap_content"
 	android:padding="12dp" android:gravity="center_vertical"
 	android:background="?android:attr/activatedBackgroundIndicator">
-	<ImageView android:id="@+id/drawer_icon" android:layout_width="wrap_content" android:layout_height="wrap_content"
+	<androidx.appcompat.widget.AppCompatImageView android:id="@+id/drawer_icon" android:layout_width="24dp" android:layout_height="24dp"
 		android:layout_marginRight="12dp" android:contentDescription="@null"/>
 	<TextView android:id="@+id/drawer_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
 		android:textSize="16sp"/>

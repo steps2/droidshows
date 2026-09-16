@@ -88,6 +88,7 @@ import android.view.ContextMenu.ContextMenuInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
+import android.util.TypedValue;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -103,7 +104,9 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.Button;
 import android.widget.ToggleButton;
 import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import nl.asymmetrics.droidshows.ui.HamburgerDrawable;
 
 public class DroidShows extends ListActivity
 {
@@ -331,12 +334,17 @@ public class DroidShows extends ListActivity
 			getString(R.string.media_movies),
 		};
 		private final int[] icons = new int[] {
-			R.drawable.icon,
-			android.R.drawable.ic_media_play,
+			R.drawable.ic_drawer_tv,
+			R.drawable.ic_drawer_movie,
 		};
+		private final int iconTint;
 
 		public DrawerAdapter() {
 			super(DroidShows.this, R.layout.drawer_row);
+			// Tint the outline icons with the theme's secondary text colour.
+			TypedValue tv = new TypedValue();
+			DroidShows.this.getTheme().resolveAttribute(android.R.attr.textColorSecondary, tv, true);
+			iconTint = tv.data;
 		}
 
 		@Override
@@ -351,7 +359,14 @@ public class DroidShows extends ListActivity
 				convertView = vi.inflate(R.layout.drawer_row, parent, false);
 			}
 			((TextView) convertView.findViewById(R.id.drawer_label)).setText(labels[position]);
-			((ImageView) convertView.findViewById(R.id.drawer_icon)).setImageResource(icons[position]);
+			ImageView iconView = (ImageView) convertView.findViewById(R.id.drawer_icon);
+			iconView.setImageResource(icons[position]);
+			Drawable d = iconView.getDrawable();
+			if (d != null) {
+				d = DrawableCompat.wrap(d.mutate());
+				DrawableCompat.setTint(d, iconTint);
+				iconView.setImageDrawable(d);
+			}
 			return convertView;
 		}
 	}
@@ -620,6 +635,10 @@ public class DroidShows extends ListActivity
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 			actionBar.setIcon(R.drawable.actionbar);
 		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, R.string.drawer_open, R.string.drawer_close);
+		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow.
+		HamburgerDrawable hamburger = new HamburgerDrawable(this);
+		hamburger.setColor(drawerToggle.getDrawerArrowDrawable().getColor());
+		drawerToggle.setDrawerArrowDrawable(hamburger);
 		drawerLayout.addDrawerListener(drawerToggle);
 	}
 
