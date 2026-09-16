@@ -22,6 +22,8 @@ public class TVShowItem {
         private String episodeName;
         private String episodeSeen;
         private int mediaType = 0;
+        private String runtime;
+        private String firstAired;
 
         public TVShowItem(String serieid, String language, String icon, Drawable dicon, String
                           name, int snumber, String nextEpisode, Date nextAir,
@@ -168,5 +170,21 @@ public class TVShowItem {
 
 	        public void setMediaType(int mediaType) {
 	                this.mediaType = mediaType;
+	        }
+
+        public String getRuntime() {
+                return this.runtime;
+        }
+
+	        public void setRuntime(String runtime) {
+	                this.runtime = runtime;
+	        }
+
+        public String getFirstAired() {
+                return this.firstAired;
+        }
+
+	        public void setFirstAired(String firstAired) {
+	                this.firstAired = firstAired;
 	        }
 }

@@ -27,6 +27,7 @@ import android.webkit.WebView;
 import android.webkit.WebView.HitTestResult;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
+import android.widget.CheckBox;
 import android.widget.TextView;
 
 public class ViewSerie extends Activity
@@ -42,6 +43,8 @@ public class ViewSerie extends Activity
 	private List<String> actors = new ArrayList<String>();
 	private SQLiteStore db;
 	private SwipeDetect swipeDetect = new SwipeDetect();
+	private boolean isMovie = false;
+	private String movieEpisodeId = null;
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -54,7 +57,7 @@ public class ViewSerie extends Activity
 		serieId = getIntent().getStringExtra("serieId");
 	
 		String query = "SELECT serieName, posterThumb, poster, fanart, overview, status, firstAired, airsDayOfWeek, "
-			+ "airsTime, runtime, network, rating, contentRating, imdbId FROM series WHERE id = '" + serieId + "'";
+			+ "airsTime, runtime, network, rating, contentRating, imdbId, mediaType FROM series WHERE id = '" + serieId + "'";
 		Cursor c = db.Query(query);
 		c.moveToFirst();
 		if (c != null && c.isFirst()) {
@@ -72,6 +75,7 @@ public class ViewSerie extends Activity
 			int ratingCol = c.getColumnIndex("rating");
 			int contentRatingCol = c.getColumnIndex("contentRating");
 			int imdbIdCol = c.getColumnIndex("imdbId");
+			int mediaTypeCol = c.getColumnIndex("mediaType");
 			serieName = c.getString(snameCol);
 			String posterThumb = c.getString(posterThumbCol);
 			posterURL = c.getString(posterCol);
@@ -86,6 +90,7 @@ public class ViewSerie extends Activity
 			String rating = c.getString(ratingCol);
 			String contentRating = c.getString(contentRatingCol);
 			imdbId = c.getString(imdbIdCol);
+			isMovie = (mediaTypeCol != -1 && c.getInt(mediaTypeCol) == 1);
 			c.close();
 					
 			if (!network.equalsIgnoreCase("null")) {
@@ -100,6 +105,24 @@ public class ViewSerie extends Activity
 			
 			TextView serieNameV = (TextView) findViewById(R.id.serieName);
 			serieNameV.setText(serieName);
+
+			if (isMovie) {
+				final CheckBox watchedV = (CheckBox) findViewById(R.id.movie_watched);
+				Cursor cmovie = db.Query("SELECT id, seen FROM episodes WHERE serieId='"+ serieId +"' LIMIT 1");
+				cmovie.moveToFirst();
+				if (cmovie != null && cmovie.isFirst()) {
+					movieEpisodeId = cmovie.getString(cmovie.getColumnIndex("id"));
+					watchedV.setChecked(cmovie.getInt(cmovie.getColumnIndex("seen")) > 0);
+					watchedV.setVisibility(View.VISIBLE);
+					watchedV.setOnClickListener(new View.OnClickListener() {
+						public void onClick(View v) {
+							// The checkbox already flipped its visual state; mirror it in the database
+							db.updateUnwatchedEpisode(serieId, movieEpisodeId);
+						}
+					});
+				}
+				if (cmovie != null) cmovie.close();
+			}
 	
 			ImageView posterThumbV = (ImageView) findViewById(R.id.posterThumb);
 			try {
@@ -126,9 +149,9 @@ public class ViewSerie extends Activity
 
 			TextView ratingV = (TextView) findViewById(R.id.rating);
 			if (!rating.equalsIgnoreCase("null") && !rating.equals(""))
-				ratingV.setText("IMDb: "+ rating);
+				ratingV.setText((isMovie ? "TMDB: " : "IMDb: ")+ rating);
 			else
-				ratingV.setText("IMDb Info");
+				ratingV.setText(isMovie ? "TMDB Info" : "IMDb Info");
 			ratingV.setOnTouchListener(swipeDetect);
 					
 			if (!firstAired.equals("null") && !firstAired.equals("")) {
@@ -164,7 +187,7 @@ public class ViewSerie extends Activity
 				try {
 					int runtimeInt = Integer.parseInt(runtime);
 					int epCount = db.getEpsWatched(serieId);
-					if (epCount > 0) {
+					if (epCount > 0 && !isMovie) {
 						int minutes = runtimeInt * epCount;
 						int hours = minutes / 60;
 						minutes = minutes % 60;

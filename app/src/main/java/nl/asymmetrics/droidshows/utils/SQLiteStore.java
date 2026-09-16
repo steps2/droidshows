@@ -116,10 +116,10 @@ public class SQLiteStore extends SQLiteOpenHelper
 
 	/* Get Methods */
 	public TVShowItem createTVShowItem(String serieId) {
-		String name = "", language = "", tmpPoster = "", showStatus = "", tmpNextEpisode = "", nextEpisode = "", tmpNextAir = "", extResources = "";
+		String name = "", language = "", tmpPoster = "", showStatus = "", tmpNextEpisode = "", nextEpisode = "", tmpNextAir = "", extResources = "", runtime = "", firstAired = "";
 		int tmpStatus = 0, seasonCount = 0, unwatched = 0, unwatchedAired = 0, mediaType = 0;
 		Date nextAir = null;
-		Cursor c = Query("SELECT serieName, language, posterThumb, status, passiveStatus, seasonCount, unwatchedAired, unwatched, nextEpisode, nextAir, extResources, mediaType FROM series WHERE id = '" + serieId + "'");
+		Cursor c = Query("SELECT serieName, language, posterThumb, status, passiveStatus, seasonCount, unwatchedAired, unwatched, nextEpisode, nextAir, extResources, mediaType, runtime, firstAired FROM series WHERE id = '" + serieId + "'");
 		try {
 			c.moveToFirst();
 			if (c != null && c.isFirst()) {
@@ -138,6 +138,14 @@ public class SQLiteStore extends SQLiteOpenHelper
 				if (mediaTypeCol != -1) {
 					mediaType = c.getInt(mediaTypeCol);
 				}
+				int runtimeCol = c.getColumnIndex("runtime");
+				if (runtimeCol != -1) {
+					runtime = c.getString(runtimeCol);
+				}
+				int firstAiredCol = c.getColumnIndex("firstAired");
+				if (firstAiredCol != -1) {
+					firstAired = c.getString(firstAiredCol);
+				}
 			}
 		} catch (SQLiteException e) {
 			Log.e(TAG, e.getMessage());
@@ -155,6 +163,8 @@ public class SQLiteStore extends SQLiteOpenHelper
 		boolean status = (tmpStatus == 1);
 		TVShowItem tvsi = new TVShowItem(serieId, language, tmpPoster, null, name, seasonCount, nextEpisode, nextAir, unwatchedAired, unwatched, status, showStatus, extResources);
 		tvsi.setMediaType(mediaType);
+		tvsi.setRuntime(runtime);
+		tvsi.setFirstAired(firstAired);
 		return tvsi;
 	}
 
@@ -355,7 +365,10 @@ public class SQLiteStore extends SQLiteOpenHelper
 				TVShowItem episode = createTVShowItem(serieId);
 
 				episode.setEpisodeId(episodeId);
-				episode.setEpisodeName(seasonNumber + (episodeNumber < 10 ? "x0" : "x") + episodeNumber +" "+ episodeName);
+				if (episode.getMediaType() == 1)
+					episode.setEpisodeName("");
+				else
+					episode.setEpisodeName(seasonNumber + (episodeNumber < 10 ? "x0" : "x") + episodeNumber +" "+ episodeName);
 				Date epSeen = new Date(seen * 1000);
 				episode.setEpisodeSeen(SimpleDateFormat.getDateTimeInstance().format(epSeen));
 				
@@ -587,6 +600,23 @@ public class SQLiteStore extends SQLiteOpenHelper
 
 	public String getNextEpisodeId(String serieId) {
 		return getNextEpisodeId(serieId, false);
+	}
+
+	/* First episode row id, regardless of seen state (used to toggle a movie back to unwatched) */
+	public String getFirstEpisodeId(String serieId) {
+		String id = null;
+		Cursor c = null;
+		try {
+			c = Query("SELECT id FROM episodes WHERE serieId='"+ serieId +"' ORDER BY seasonNumber, episodeNumber ASC LIMIT 1");
+			c.moveToFirst();
+			if (c != null && c.isFirst()) {
+				id = c.getString(c.getColumnIndex("id"));
+			}
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+		if (c != null) c.close();
+		return id;
 	}
 
 	public String getNextEpisodeId(String serieId, boolean noFutureEp) {

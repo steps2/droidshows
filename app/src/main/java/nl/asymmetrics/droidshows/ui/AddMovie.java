@@ -77,6 +77,7 @@ public class AddMovie extends ListActivity
 		List<Serie> search_movies = new ArrayList<Serie>();
 		this.moviesearch_adapter = new MovieSearchAdapter(this, R.layout.row_search_movies, search_movies);
 		setListAdapter(moviesearch_adapter);
+		((TextView) findViewById(android.R.id.empty)).setText(R.string.layout_search_no_movies);
 		apiKey = getSharedPreferences("DroidShowsPref", 0).getString(DroidShows.TMDB_API_KEY_NAME, "");
 		if (apiKey == null || apiKey.length() == 0) {
 			((TextView) findViewById(R.id.add_movie_title)).setText(R.string.tmdb_key_required);

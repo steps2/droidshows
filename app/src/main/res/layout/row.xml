@@ -8,6 +8,7 @@
 			<TextView android:id="@+id/serienextepisode" android:layout_width="fill_parent" android:layout_height="wrap_content" android:ellipsize="marquee" android:singleLine="true"/>
 		</LinearLayout>
 	</LinearLayout>
-	<ImageButton android:id="@+id/seriecontext" android:layout_width="wrap_content" android:layout_height="fill_parent" android:layout_alignTop="@+id/serie" android:layout_alignBottom="@+id/serie" android:layout_alignParentRight="true" android:src="@drawable/context" android:background="@null" android:focusable="false" android:focusableInTouchMode="false" android:onClick="openContext"/>
+	<CheckBox android:id="@+id/watched_check" android:layout_width="wrap_content" android:layout_height="fill_parent" android:layout_alignTop="@+id/serie" android:layout_alignBottom="@+id/serie" android:layout_alignParentRight="true" android:gravity="center_vertical" android:visibility="gone" android:focusable="false" android:focusableInTouchMode="false" android:contentDescription="@string/movie_watched"/>
+	<ImageButton android:id="@+id/seriecontext" android:layout_width="wrap_content" android:layout_height="fill_parent" android:layout_alignTop="@+id/serie" android:layout_alignBottom="@+id/serie" android:layout_toLeftOf="@+id/watched_check" android:src="@drawable/context" android:background="@null" android:focusable="false" android:focusableInTouchMode="false" android:onClick="openContext"/>
 	<View android:layout_width="fill_parent" android:layout_height="1px" android:background="@drawable/div"/>
 </RelativeLayout>

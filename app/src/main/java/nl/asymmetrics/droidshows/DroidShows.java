@@ -10,6 +10,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -56,7 +57,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
@@ -97,7 +100,10 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
+import android.widget.Button;
 import android.widget.ToggleButton;
+import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.drawerlayout.widget.DrawerLayout;
 
 public class DroidShows extends ListActivity
 {
@@ -119,6 +125,10 @@ public class DroidShows extends ListActivity
 	private static final int UPDATEALL_MENU_ITEM = ADD_SERIE_MENU_ITEM + 1;
 	private static final int OPTIONS_MENU_ITEM = UPDATEALL_MENU_ITEM + 1;
 	private static final int EXIT_MENU_ITEM = OPTIONS_MENU_ITEM + 1;
+	private static final int RESTORE_BACKUP_MENU_ITEM = EXIT_MENU_ITEM + 1;
+	private static final int BACKUP_NOW_MENU_ITEM = RESTORE_BACKUP_MENU_ITEM + 1;
+	private static final int REQ_RESTORE_BACKUP = 1001;
+	private static final int REQ_BACKUP_NOW = 1002;
 	/* Context Menus */
 	private static final int VIEW_SEASONS_CONTEXT = Menu.FIRST;
 	private static final int VIEW_SERIEDETAILS_CONTEXT = VIEW_SEASONS_CONTEXT + 1;
@@ -204,6 +214,9 @@ public class DroidShows extends ListActivity
 	private File[] dirList;
 	private String[] dirNamesList;
 	private Spinner spinner = null;
+	private DrawerLayout drawerLayout;
+	private ListView drawerList;
+	private ActionBarDrawerToggle drawerToggle;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -218,6 +231,7 @@ public class DroidShows extends ListActivity
 		setContentView(R.layout.main);
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
+		setupDrawer();
 
 		// Preferences
 		sharedPrefs = getSharedPreferences(PREF_NAME, 0);
@@ -289,6 +303,71 @@ public class DroidShows extends ListActivity
 		keyboard = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
 		padding = (int) (6 * (getApplicationContext().getResources().getDisplayMetrics().densityDpi / 160f));
 		vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+	}
+
+	/* Navigation drawer: TV Shows / Movies. The drawer replaces the media
+	 * spinner that used to sit in the ActionBar; Watching / Finished / Log
+	 * is back to being the only ActionBar spinner, in its original spot. */
+	private void setupDrawer() {
+		drawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+		drawerList = (ListView) findViewById(R.id.drawer_list);
+		drawerList.setAdapter(new DrawerAdapter());
+		drawerList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+				drawerList.setItemChecked(position, true);
+				drawerLayout.closeDrawer(drawerList);
+				if (position != mediaType) {
+					mediaType = position;
+					getSeries();
+				}
+			}
+		});
+		drawerList.setItemChecked(mediaType, true);
+	}
+
+	private class DrawerAdapter extends ArrayAdapter<String> {
+		private final String[] labels = new String[] {
+			getString(R.string.media_tv_shows),
+			getString(R.string.media_movies),
+		};
+		private final int[] icons = new int[] {
+			R.drawable.icon,
+			android.R.drawable.ic_media_play,
+		};
+
+		public DrawerAdapter() {
+			super(DroidShows.this, R.layout.drawer_row);
+		}
+
+		@Override
+		public int getCount() {
+			return labels.length;
+		}
+
+		@Override
+		public View getView(int position, View convertView, ViewGroup parent) {
+			if (convertView == null) {
+				LayoutInflater vi = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+				convertView = vi.inflate(R.layout.drawer_row, parent, false);
+			}
+			((TextView) convertView.findViewById(R.id.drawer_label)).setText(labels[position]);
+			((ImageView) convertView.findViewById(R.id.drawer_icon)).setImageResource(icons[position]);
+			return convertView;
+		}
+	}
+
+	@Override
+	protected void onPostCreate(Bundle savedInstanceState) {
+		super.onPostCreate(savedInstanceState);
+		if (drawerToggle != null)
+			drawerToggle.syncState();
+	}
+
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		if (drawerToggle != null)
+			drawerToggle.onConfigurationChanged(newConfig);
 	}
 
 	/*
@@ -487,6 +566,8 @@ public class DroidShows extends ListActivity
 		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(android.R.drawable.ic_menu_add);
 		menu.add(0, UPDATEALL_MENU_ITEM, 0, getString(R.string.menu_update)).setIcon(android.R.drawable.ic_menu_upload);
 		menu.add(0, OPTIONS_MENU_ITEM, 0, getString(R.string.menu_about)).setIcon(android.R.drawable.ic_menu_manage);
+		menu.add(0, RESTORE_BACKUP_MENU_ITEM, 0, getString(R.string.menu_restore_backup)).setIcon(android.R.drawable.ic_menu_revert);
+		menu.add(0, BACKUP_NOW_MENU_ITEM, 0, getString(R.string.menu_backup_now)).setIcon(android.R.drawable.ic_menu_save);
 		menu.add(0, EXIT_MENU_ITEM, 0, getString(R.string.menu_exit)).setIcon(android.R.drawable.ic_menu_close_clear_cancel);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB)
 			arrangeActionBar(menu);
@@ -498,25 +579,11 @@ public class DroidShows extends ListActivity
 		menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM).setVisible(false);
 		menu.findItem(LOG_MODE_ITEM).setVisible(false);
 		menu.findItem(SEARCH_MENU_ITEM).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-		final Spinner mediaSpinner = new Spinner(this);	// TV Shows / Movies
 		final Spinner modeSpinner = new Spinner(this);	// Watching / Finished / Log
 		spinner = modeSpinner;	// legacy handle used by onBackPressed
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-			mediaSpinner.setPopupBackgroundResource(R.drawable.menu_dropdown_panel);
 			modeSpinner.setPopupBackgroundResource(R.drawable.menu_dropdown_panel);
 		}
-		mediaSpinner.setAdapter(new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1,
-			new String[] {
-				getString(R.string.media_tv_shows),
-				getString(R.string.media_movies),
-			}) {
-			@Override
-			public View getView(int position, View convertView, ViewGroup parent) {
-				View view = super.getView(position, convertView, parent);
-				((TextView) view).setTextColor(getColor(android.R.color.primary_text_dark));
-				return view;
-			}
-		});
 		modeSpinner.setAdapter(new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1,
 			new String[] {
 				getString(R.string.mode_watching),
@@ -530,24 +597,9 @@ public class DroidShows extends ListActivity
 				return view;
 			}
 		});
-		mediaSpinner.setSelection(mediaType);
 		modeSpinner.setSelection(logMode ? 2 : showArchive);
-		LinearLayout spinnersLayout = new LinearLayout(this);
-		spinnersLayout.setOrientation(LinearLayout.HORIZONTAL);
-		spinnersLayout.addView(mediaSpinner);
-		spinnersLayout.addView(modeSpinner);
 		listView.postDelayed(new Runnable() {
 			public void run() {
-				mediaSpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
-					public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
-						if (position != mediaType) {
-							mediaType = position;
-							getSeries();
-						}
-					}
-					public void onNothingSelected(AdapterView<?> arg0) {
-					}
-				});
 				modeSpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
 					public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
 						logMode = position == 2;
@@ -562,18 +614,27 @@ public class DroidShows extends ListActivity
 			}
 		}, 1000);
 		ActionBar actionBar = getActionBar();
-		actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME);
-		actionBar.setCustomView(spinnersLayout);
+		actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME | ActionBar.DISPLAY_HOME_AS_UP);
+		actionBar.setCustomView(modeSpinner);
+		actionBar.setHomeButtonEnabled(true);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 			actionBar.setIcon(R.drawable.actionbar);
+		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, R.string.drawer_open, R.string.drawer_close);
+		drawerLayout.addDrawerListener(drawerToggle);
 	}
 
 	@Override
 	public boolean onPrepareOptionsMenu(Menu menu) {
 		menu.findItem(UNDO_MENU_ITEM)
 			.setVisible(undo.size() > 0);
+		menu.findItem(UPDATEALL_MENU_ITEM)
+			.setEnabled(!logMode)
+			.setTitle(mediaType == 1 ? R.string.menu_update_movies : R.string.menu_update);
+		menu.findItem(ADD_SERIE_MENU_ITEM)
+			.setTitle(mediaType == 1 ? R.string.menu_add_movie : R.string.menu_add_serie);
 		menu.findItem(FILTER_MENU_ITEM)
-			.setEnabled(!logMode && !searching());
+			.setEnabled(!logMode && !searching())
+			.setTitle(mediaType == 1 ? R.string.menu_filter_movies : R.string.menu_filter);
 		menu.findItem(SEEN_MENU_ITEM)
 			.setEnabled(!logMode && !searching());
 		menu.findItem(SORT_MENU_ITEM)
@@ -610,9 +671,11 @@ public class DroidShows extends ListActivity
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
+		if (drawerToggle != null && drawerToggle.onOptionsItemSelected(item))
+			return true;
 		switch (item.getItemId()) {
 			case ADD_SERIE_MENU_ITEM :
-				super.onSearchRequested();
+				searchForShow(null);	// AddSerie or AddMovie, depending on the current section
 				break;
 			case SEARCH_MENU_ITEM :
 				onSearchRequested();
@@ -634,6 +697,12 @@ public class DroidShows extends ListActivity
 				break;
 			case OPTIONS_MENU_ITEM :
 				aboutDialog();
+				break;
+			case RESTORE_BACKUP_MENU_ITEM :
+				safRestore();
+				break;
+			case BACKUP_NOW_MENU_ITEM :
+				safBackup();
 				break;
 			case UNDO_MENU_ITEM :
 				markLastEpUnseen();
@@ -1058,24 +1127,202 @@ public class DroidShows extends ListActivity
 		}
 	}
 
+	/* Storage Access Framework backup/restore (API 19+): pick any document as
+	 * the backup source/destination instead of the legacy /DroidShows folder.
+	 * The legacy folder-based backup/restore stays available in Options. */
+	private void safRestore() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+			restore();	// legacy folder-based restore on old Android versions
+			return;
+		}
+		try {
+			Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+			intent.addCategory(Intent.CATEGORY_OPENABLE);
+			intent.setType("*/*");
+			startActivityForResult(intent, REQ_RESTORE_BACKUP);
+		} catch (Exception e) {
+			Toast.makeText(getApplicationContext(), R.string.saf_not_supported, Toast.LENGTH_LONG).show();
+		}
+	}
+
+	private void safBackup() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+			backup(false);	// legacy folder-based backup on old Android versions
+			return;
+		}
+		try {
+			Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+			intent.addCategory(Intent.CATEGORY_OPENABLE);
+			intent.setType("application/octet-stream");
+			intent.putExtra(Intent.EXTRA_TITLE, "DroidShows.db");
+			startActivityForResult(intent, REQ_BACKUP_NOW);
+		} catch (Exception e) {
+			Toast.makeText(getApplicationContext(), R.string.saf_not_supported, Toast.LENGTH_LONG).show();
+		}
+	}
+
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+		super.onActivityResult(requestCode, resultCode, data);
+		if (resultCode != RESULT_OK || data == null || data.getData() == null)
+			return;
+		Uri uri = data.getData();
+		if (requestCode == REQ_RESTORE_BACKUP)
+			confirmSafRestore(uri);
+		else if (requestCode == REQ_BACKUP_NOW)
+			backupToUri(uri);
+	}
+
+	private void confirmSafRestore(final Uri uri) {
+		AlertDialog.Builder adb = new AlertDialog.Builder(this);
+		adb.setTitle(R.string.dialog_restore);
+		adb.setMessage(R.string.dialog_restore_now);
+		adb.setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int id) {
+				restoreFromUri(uri);
+			}
+		});
+		adb.setNegativeButton(R.string.dialog_cancel, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int id) {
+				dialog.cancel();
+			}
+		});
+		adb.show();
+	}
+
+	private void restoreFromUri(Uri uri) {
+		File tmp = new File(getCacheDir(), "restore_tmp.db");
+		try {
+			InputStream in = getContentResolver().openInputStream(uri);
+			if (in == null)
+				throw new IOException("Cannot open backup");
+			FileOutputStream out = new FileOutputStream(tmp);
+			byte[] buf = new byte[8192];
+			int n;
+			while ((n = in.read(buf)) > 0)
+				out.write(buf, 0, n);
+			out.close();
+			in.close();
+		} catch (Exception e) {
+			Log.e(SQLiteStore.TAG, "Error reading backup", e);
+			Toast.makeText(getApplicationContext(), R.string.dialog_restore_failed, Toast.LENGTH_LONG).show();
+			return;
+		}
+		if (!isValidDroidShowsDb(tmp)) {
+			tmp.delete();
+			Toast.makeText(getApplicationContext(), R.string.dialog_restore_invalid, Toast.LENGTH_LONG).show();
+			return;
+		}
+		try {
+			if (asyncInfo != null)
+				asyncInfo.cancel(true);
+			db.close();
+			File databasesDir = new File(getApplicationInfo().dataDir +"/databases");
+			File destination = new File(databasesDir, "DroidShows.db");
+			FileInputStream in = new FileInputStream(tmp);
+			FileOutputStream out = new FileOutputStream(destination);
+			byte[] buf = new byte[8192];
+			int n;
+			while ((n = in.read(buf)) > 0)
+				out.write(buf, 0, n);
+			out.close();
+			in.close();
+			tmp.delete();
+			// drop WAL/journal sidecars of the replaced database
+			File[] files = databasesDir.listFiles();
+			if (files != null)
+				for (File file : files)
+					if (!file.getName().equalsIgnoreCase("DroidShows.db"))
+						file.delete();
+			db.openDataBase();
+			// migrate the restored (possibly ancient) schema to the current one;
+			// old rows come out as TV shows (mediaType=0) with an empty tvmazeId
+			if (updateDS.needsUpdate()) {
+				if (updateDS.updateDroidShows())
+					db.updateShowStats();
+				else
+					Toast.makeText(getApplicationContext(), R.string.messages_error_dbupdate, Toast.LENGTH_LONG).show();
+			}
+			// posters cached for another install are stale
+			File thumbs[] = new File(getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs/banners/posters").listFiles();
+			if (thumbs != null)
+				for (File thumb : thumbs)
+					thumb.delete();
+			undo.clear();
+			getSeries();
+			migrateLibraryToTVMaze();
+			Toast.makeText(getApplicationContext(), R.string.dialog_restore_done, Toast.LENGTH_LONG).show();
+		} catch (Exception e) {
+			Log.e(SQLiteStore.TAG, "Error restoring backup", e);
+			try { db.openDataBase(); } catch (Exception e2) {}
+			Toast.makeText(getApplicationContext(), R.string.dialog_restore_failed, Toast.LENGTH_LONG).show();
+		}
+	}
+
+	private boolean isValidDroidShowsDb(File dbFile) {
+		SQLiteDatabase check = null;
+		try {
+			check = SQLiteDatabase.openDatabase(dbFile.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+			Cursor c = check.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('droidseries', 'series', 'episodes')", null);
+			boolean valid = (c != null && c.getCount() == 3);
+			if (c != null)
+				c.close();
+			return valid;
+		} catch (Exception e) {
+			return false;
+		} finally {
+			if (check != null)
+				check.close();
+		}
+	}
+
+	private void backupToUri(Uri uri) {
+		try {
+			if (asyncInfo != null)
+				asyncInfo.cancel(true);
+			db.close();
+			File source = new File(getApplicationInfo().dataDir +"/databases", "DroidShows.db");
+			InputStream in = new FileInputStream(source);
+			OutputStream out = getContentResolver().openOutputStream(uri);
+			if (out == null)
+				throw new IOException("Cannot open destination");
+			byte[] buf = new byte[8192];
+			int n;
+			while ((n = in.read(buf)) > 0)
+				out.write(buf, 0, n);
+			out.close();
+			in.close();
+			db.openDataBase();
+			Toast.makeText(getApplicationContext(), R.string.dialog_backup_done, Toast.LENGTH_LONG).show();
+		} catch (Exception e) {
+			Log.e(SQLiteStore.TAG, "Error writing backup", e);
+			try { db.openDataBase(); } catch (Exception e2) {}
+			Toast.makeText(getApplicationContext(), R.string.dialog_backup_failed, Toast.LENGTH_LONG).show();
+		}
+	}
+
 	/* context menu */
 	public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
 		super.onCreateContextMenu(menu, v, menuInfo);
 		AdapterContextMenuInfo info = (AdapterContextMenuInfo) menuInfo;
 		TVShowItem serie = seriesAdapter.getItem(info.position);
-		if (logMode)
+		boolean isMovie = serie.getMediaType() == 1;
+		menu.setHeaderTitle(serie.getName());
+		if (logMode && !isMovie)
 			menu.add(0, VIEW_SEASONS_CONTEXT, VIEW_SEASONS_CONTEXT, getString(R.string.messages_seasons));
-		menu.add(0, VIEW_SERIEDETAILS_CONTEXT, VIEW_SERIEDETAILS_CONTEXT, getString(R.string.menu_context_view_serie_details));
-		if (!logMode && serie.getUnwatched() > 0)
+		menu.add(0, VIEW_SERIEDETAILS_CONTEXT, VIEW_SERIEDETAILS_CONTEXT, getString(isMovie ? R.string.menu_context_movie_details : R.string.menu_context_view_serie_details));
+		if (!logMode && !isMovie && serie.getUnwatched() > 0)
 			menu.add(0, VIEW_EPISODEDETAILS_CONTEXT, VIEW_EPISODEDETAILS_CONTEXT, getString(R.string.messsages_view_ep_details));
 		menu.add(0, EXT_RESOURCES_CONTEXT, EXT_RESOURCES_CONTEXT, getString(R.string.menu_context_ext_resources));
 		if (!logMode && canMarkNextEpSeen(serie))
-			menu.add(0, MARK_NEXT_EPISODE_AS_SEEN_CONTEXT, MARK_NEXT_EPISODE_AS_SEEN_CONTEXT, getString(R.string.menu_context_mark_next_episode_as_seen));
+			menu.add(0, MARK_NEXT_EPISODE_AS_SEEN_CONTEXT, MARK_NEXT_EPISODE_AS_SEEN_CONTEXT, getString(isMovie
+				? (serie.getUnwatched() > 0 ? R.string.menu_context_mark_movie_seen : R.string.menu_context_mark_movie_unseen)
+				: R.string.menu_context_mark_next_episode_as_seen));
 		if (!logMode) {
 			menu.add(0, TOGGLE_ARCHIVED_CONTEXT, TOGGLE_ARCHIVED_CONTEXT, getString(R.string.menu_archive));
 			menu.add(0, PIN_CONTEXT, PIN_CONTEXT, getString(R.string.menu_context_pin));
-			menu.add(0, DELETE_CONTEXT, DELETE_CONTEXT, getString(R.string.menu_context_delete));
-			menu.add(0, UPDATE_CONTEXT, UPDATE_CONTEXT, getString(R.string.menu_context_update));
+			menu.add(0, DELETE_CONTEXT, DELETE_CONTEXT, getString(isMovie ? R.string.menu_context_delete_movie : R.string.menu_context_delete));
+			menu.add(0, UPDATE_CONTEXT, UPDATE_CONTEXT, getString(isMovie ? R.string.menu_context_update_movie : R.string.menu_context_update));
 		    if (serie.getPassiveStatus())
 		    	menu.findItem(TOGGLE_ARCHIVED_CONTEXT).setTitle(R.string.menu_unarchive);
 		    if (pinnedShows.contains(serie.getSerieId()))
@@ -1090,7 +1337,10 @@ public class DroidShows extends ListActivity
 		final String serieId = serie.getSerieId();
 		switch(item.getItemId()) {
 			case MARK_NEXT_EPISODE_AS_SEEN_CONTEXT :
-				markNextEpSeen(info.position);
+				if (serie.getMediaType() == 1)
+					toggleMovieWatched(serie);
+				else
+					markNextEpSeen(info.position);
 				return true;
 			case VIEW_SEASONS_CONTEXT :
 				serieSeasons(info.position);
@@ -1140,7 +1390,7 @@ public class DroidShows extends ListActivity
 						String sname = serie.getName();
 						String toastMsg = getString(R.string.messages_deleted);
 						if (!db.deleteSerie(serieId))
-							toastMsg = "Database error while deleting show";
+							toastMsg = serie.getMediaType() == 1 ? getString(R.string.messages_error_dbdelete_movie) : "Database error while deleting show";
 						series.remove(series.indexOf(serie));
 						listView.post(updateListView);
 						Looper.prepare();	// Threads don't have a message loop
@@ -1151,7 +1401,7 @@ public class DroidShows extends ListActivity
 					}
 				};
 				AlertDialog.Builder alertDialog = new AlertDialog.Builder(this)
-					.setTitle(R.string.dialog_title_delete)
+					.setTitle(serie.getMediaType() == 1 ? R.string.dialog_title_delete_movie : R.string.dialog_title_delete)
 					.setMessage(String.format(getString(R.string.dialog_delete), serie.getName()))
 					.setIcon(android.R.drawable.ic_dialog_alert)
 					.setCancelable(false)
@@ -1204,6 +1454,10 @@ public class DroidShows extends ListActivity
 
 	private void markNextEpSeen(int position) {
 		TVShowItem serie = seriesAdapter.getItem(position);
+		if (serie.getMediaType() == 1) {	// movies have a single pseudo-episode: toggle it
+			toggleMovieWatched(serie);
+			return;
+		}
 		String serieId = serie.getSerieId();
 		String nextEpisode = db.getNextEpisodeId(serieId, true);
 		if (!nextEpisode.equals("-1")) {
@@ -1212,6 +1466,20 @@ public class DroidShows extends ListActivity
 			undo.add(new String[] {serieId, nextEpisode, serie.getName()});
 			updateShowView(serie);
 		}
+	}
+
+	/* Movies have a single pseudo-episode: toggle its seen state directly */
+	private void toggleMovieWatched(TVShowItem movie) {
+		String serieId = movie.getSerieId();
+		boolean markingSeen = movie.getUnwatched() > 0;
+		String episodeId = markingSeen ? db.getNextEpisodeId(serieId) : db.getFirstEpisodeId(serieId);
+		if (episodeId == null || episodeId.equals("-1"))
+			return;
+		db.updateUnwatchedEpisode(serieId, episodeId);
+		Toast.makeText(getApplicationContext(), movie.getName() +" "+ getString(markingSeen ? R.string.messages_marked_seen : R.string.messages_marked_unseen), Toast.LENGTH_SHORT).show();
+		if (markingSeen)
+			undo.add(new String[] {serieId, episodeId, movie.getName()});
+		updateShowView(movie);
 	}
 
 	private void markLastEpUnseen() {
@@ -1300,7 +1568,7 @@ public class DroidShows extends ListActivity
 		startActivity(rt);
 	}
 
-	private void WikiDetails(String serieName) {
+	private void WikiDetails(String serieName, boolean isMovie) {
 		serieName = serieName.replaceAll(" \\(....\\)", "");
 		Intent wiki;
 		String wikiApp = null;
@@ -1310,7 +1578,7 @@ public class DroidShows extends ListActivity
 	    	wikiApp = "org.wikipedia.beta";
 	    if (wikiApp == null) {
 	    	String uri = "https://"+ (langCode.equals("all") ? "" : langCode +".") +"m.wikipedia.org/wiki/index.php?search="
-	    		+ Uri.encode(serieName + (langCode.equals("en") ? " (TV series)" : ""));
+	    		+ Uri.encode(serieName + (langCode.equals("en") && !isMovie ? " (TV series)" : ""));
 	    	wiki = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
 	    } else {
 	    	wiki = new Intent(Intent.ACTION_SEND)
@@ -1360,69 +1628,66 @@ public class DroidShows extends ListActivity
 					extResourcesString += url +"\n";
 			}
 		}
+		final TVShowItem serie = seriesAdapter.getItem(position);
+		final boolean isMovie = serie.getMediaType() == 1;
+		final String viewImdb = getString(R.string.menu_context_view_imdb);
+		final String viewEpImdb = getString(R.string.menu_context_view_ep_imdb);
+		final String searchOn = getString(R.string.menu_context_search_on);
 		final String[] extResources = (
-				getString(R.string.menu_context_view_imdb) +"\n"+
-				getString(R.string.menu_context_view_ep_imdb) +"\n"+
-				getString(R.string.menu_context_search_on) +" FANDOM (Wikia)\n"+
-				getString(R.string.menu_context_search_on) +" Rotten Tomatoes\n"+
-				getString(R.string.menu_context_search_on) +" Wikipedia\n"+
+				viewImdb +"\n"+
+				(isMovie ? "" : viewEpImdb +"\n")+
+				searchOn +" FANDOM (Wikia)\n"+
+				searchOn +" Rotten Tomatoes\n"+
+				searchOn +" Wikipedia\n"+
 				extResourcesString
 				+"\u2026").split("\\n");
 		final EditText input = new EditText(this);
 		final String extResourcesInput = extResourcesString;
-		final TVShowItem serie = seriesAdapter.getItem(position);
 		input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_VARIATION_URI);
 		new AlertDialog.Builder(this)
 			.setTitle(serie.getName())
 			.setItems(extResources, new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int item) {
-					switch(item) {
-						case 0 :
-							IMDbDetails(serie.getSerieId(), serie.getName(), null);
-							break;
-						case 1 :
-							IMDbDetails(serie.getSerieId(), serie.getName(), logMode ? serie.getEpisodeId() : db.getNextEpisodeId(serie.getSerieId()));
-							break;
-						case 2 :
-							Search("https://www.fandom.com/?s=", serie.getName());
-							break;
-						case 3 :
-							Search("https://www.rottentomatoes.com/search/?search=", serie.getName());
-							break;
-						case 4 :
-							WikiDetails(serie.getName());
-							break;
-						default :
-							if (item == extResources.length-1) {
-								input.setText(extResourcesInput);
-								new AlertDialog.Builder(DroidShows.this)
-									.setTitle(serie.getName())
-									.setView(input)
-									.setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
-										public void onClick(DialogInterface dialog, int which) {
-											keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
-											String resources = input.getText().toString().trim();
-											serie.setExtResources(resources);
-											db.updateExtResources(serie.getSerieId(), resources);
-											return;
-										}
-									})
-									.setNegativeButton(R.string.dialog_cancel, new DialogInterface.OnClickListener() {
-										public void onClick(DialogInterface dialog, int which) {
-											keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
-											return;
-										}
-									})
-									.show();
-								if (extResourcesInput.length() == 0) {
-									input.setText("Examples:\ntvshow.wikia.com\n*tvshow.blogspot.com\nLong-press show poster to directly open the starred url");
-									input.selectAll();
+					String clicked = extResources[item];
+					if (item == extResources.length-1) {
+						input.setText(extResourcesInput);
+						new AlertDialog.Builder(DroidShows.this)
+							.setTitle(serie.getName())
+							.setView(input)
+							.setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
+								public void onClick(DialogInterface dialog, int which) {
+									keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+									String resources = input.getText().toString().trim();
+									serie.setExtResources(resources);
+									db.updateExtResources(serie.getSerieId(), resources);
+									return;
 								}
-								input.requestFocus();
-								keyboard.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_NOT_ALWAYS);
-							} else {
-								browseExtResource(extResources[item]);
-							}
+							})
+							.setNegativeButton(R.string.dialog_cancel, new DialogInterface.OnClickListener() {
+								public void onClick(DialogInterface dialog, int which) {
+									keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+									return;
+								}
+							})
+							.show();
+						if (extResourcesInput.length() == 0) {
+							input.setText("Examples:\ntvshow.wikia.com\n*tvshow.blogspot.com\nLong-press show poster to directly open the starred url");
+							input.selectAll();
+						}
+						input.requestFocus();
+						keyboard.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_NOT_ALWAYS);
+					} else if (clicked.equals(viewImdb)) {
+						IMDbDetails(serie.getSerieId(), serie.getName(), null);
+					} else if (clicked.equals(viewEpImdb)) {
+						IMDbDetails(serie.getSerieId(), serie.getName(), logMode ? serie.getEpisodeId() : db.getNextEpisodeId(serie.getSerieId()));
+					} else if (clicked.equals(searchOn +" FANDOM (Wikia)")) {
+						Search("https://www.fandom.com/?s=", serie.getName());
+					} else if (clicked.equals(searchOn +" Rotten Tomatoes")) {
+						Search("https://www.rottentomatoes.com/search/?search=", serie.getName());
+					} else if (clicked.equals(searchOn +" Wikipedia")) {
+						WikiDetails(serie.getName(), isMovie);
+					} else {
+						browseExtResource(clicked);
 					}
 				}
 			})
@@ -1486,7 +1751,7 @@ public class DroidShows extends ListActivity
 						String toastMsg = getString(R.string.menu_context_updated);
 						boolean lastSeasonOnly = !isMovie && langCode == null && latestSeasonOption == UPDATE_LATEST_SEASON_ONLY;
 						if (!db.updateSerie(sToUpdate, lastSeasonOnly))
-							toastMsg = "Database error while updating show";
+							toastMsg = isMovie ? getString(R.string.messages_error_dbupdate_movie) : "Database error while updating show";
 						updatePosterThumb(serieId, sToUpdate);
 						m_ProgressDialog.dismiss();
 						Looper.prepare();
@@ -1498,7 +1763,7 @@ public class DroidShows extends ListActivity
 					}
 				}
 			};
-			m_ProgressDialog = ProgressDialog.show(DroidShows.this, serie.getName(), getString(R.string.messages_update_serie), true, false);
+			m_ProgressDialog = ProgressDialog.show(DroidShows.this, serie.getName(), getString(isMovie ? R.string.messages_update_movie : R.string.messages_update_serie), true, false);
 			updateShowTh = new Thread(updateserierun);
 			updateShowTh.start();
 		}
@@ -1591,9 +1856,11 @@ public class DroidShows extends ListActivity
 	}
 
 	public void updateAllSeriesDialog() {
-		String updateMessageAD = getString(R.string.dialog_update_series) + (latestSeasonOption == UPDATE_ALL_SEASONS ? getString(R.string.dialog_update_speedup) : "");
+		boolean isMovie = mediaType == 1;
+		String updateMessageAD = getString(isMovie ? R.string.dialog_update_movies : R.string.dialog_update_series)
+			+ (!isMovie && latestSeasonOption == UPDATE_ALL_SEASONS ? getString(R.string.dialog_update_speedup) : "");
 		AlertDialog.Builder alertDialog = new AlertDialog.Builder(this)
-			.setTitle(R.string.messages_title_update_series)
+			.setTitle(isMovie ? R.string.messages_title_updating_movies : R.string.messages_title_update_series)
 			.setMessage(updateMessageAD)
 			.setIcon(android.R.drawable.ic_dialog_alert)
 			.setCancelable(false)
@@ -1684,8 +1951,8 @@ public class DroidShows extends ListActivity
 			};
 			updateAllSeriesPD = new ProgressDialog(this);
 			updateAllSeriesPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-			updateAllSeriesPD.setTitle(R.string.messages_title_updating_series);
-			updateAllSeriesPD.setMessage(getString(R.string.messages_update_series));
+			updateAllSeriesPD.setTitle(mediaType == 1 ? R.string.messages_title_updating_movies : R.string.messages_title_updating_series);
+			updateAllSeriesPD.setMessage(getString(mediaType == 1 ? R.string.messages_update_movies : R.string.messages_update_series));
 			updateAllSeriesPD.setCancelable(false);
 			updateAllSeriesPD.setMax(seriesToUpdate.size());
 			updateAllSeriesPD.setProgress(0);
@@ -1763,7 +2030,15 @@ public class DroidShows extends ListActivity
 			e.printStackTrace();
 		}
 		setFastScroll();
-		findViewById(R.id.add_show).setVisibility(!logMode ? View.VISIBLE : View.GONE);
+		boolean isMovie = mediaType == 1;
+		Button addButton = (Button) findViewById(R.id.add_show);
+		addButton.setText(isMovie ? R.string.menu_add_movie : R.string.menu_context_add_serie);
+		addButton.setVisibility(!logMode ? View.VISIBLE : View.GONE);
+		TextView emptyText = (TextView) findViewById(R.id.empty_text);
+		if (emptyText != null)
+			emptyText.setText(isMovie ? R.string.layout_main_no_movies : R.string.layout_main_no_items);
+		if (drawerList != null)
+			drawerList.setItemChecked(mediaType, true);
 		main.setVisibility(View.VISIBLE);
 		asyncInfo = new AsyncInfo();
 		asyncInfo.execute();
@@ -1948,6 +2223,10 @@ public class DroidShows extends ListActivity
 
 	@Override
 	public void onBackPressed() {
+		if (drawerLayout != null && drawerLayout.isDrawerOpen(drawerList)) {
+			drawerLayout.closeDrawer(drawerList);
+			return;
+		}
 		if (searching())
 			clearFilter(null);
 		else {
@@ -2083,6 +2362,8 @@ public class DroidShows extends ListActivity
 				holder.sne = (TextView) convertView.findViewById(R.id.serienextepisode);
 				holder.icon = (IconView) convertView.findViewById(R.id.serieicon);
 				holder.context = (ImageView) convertView.findViewById(R.id.seriecontext);
+				holder.watched = (CheckBox) convertView.findViewById(R.id.watched_check);
+				holder.textCol = (LinearLayout) convertView.findViewById(R.id.serie);
 				holder.icon.getLayoutParams().height = largePostersOption ? LARGE_POSTERS_HEIGHT : ViewGroup.LayoutParams.FILL_PARENT;
 				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 					holder.context.setImageResource(R.drawable.context_material);
@@ -2096,39 +2377,48 @@ public class DroidShows extends ListActivity
 			if (!logMode) {
 				int nunwatched = serie.getUnwatched();
 				int nunwatchedAired = serie.getUnwatchedAired();
-				String ended = (serie.getShowStatus().equalsIgnoreCase("Ended") ? " \u2020" : "");
+				boolean isMovie = serie.getMediaType() == 1;
+				String ended = (!isMovie && serie.getShowStatus().equalsIgnoreCase("Ended") ? " \u2020" : "");
+				setTextColMargin(holder, isMovie);
 				if (holder.sn != null) {
 					holder.sn.setText((pinnedShows.contains(serie.getSerieId()) ? "\u2022 " : "") + serie.getName() + ended);
 					holder.sn.setEnabled(!searching() || !serie.getPassiveStatus());
 				}
 				if (holder.si != null) {
-					String siText = "";
-					int sNumber = serie.getSNumber();
-					if (sNumber == 1) {
-						siText = sNumber +" "+ strSeason;
+					if (isMovie) {
+						holder.si.setText(movieInfoText(serie));
+						holder.si.setEnabled(nunwatched > 0);
 					} else {
-						siText = sNumber +" "+ strSeasons;
-					}
-					String unwatched = "";
-					if (nunwatched == 0) {
-						unwatched = strNoNewEps;
-						if (!serie.getShowStatus().equalsIgnoreCase("null"))
-							unwatched += " ("+ translateStatus(serie.getShowStatus()) +")";
-						holder.si.setEnabled(false);
-					} else {
-						unwatched = nunwatched +" "+ (nunwatched > 1 ? strNewEps : strNewEp) +" ";
-						if (nunwatchedAired > 0) {
-							unwatched = (nunwatchedAired == nunwatched ? "" : nunwatchedAired +" "+ strOf +" ") + unwatched + strEpAired + (nunwatchedAired == nunwatched && ended.isEmpty() ? " \u00b7" : "");
-							holder.si.setEnabled(true);
+						String siText = "";
+						int sNumber = serie.getSNumber();
+						if (sNumber == 1) {
+							siText = sNumber +" "+ strSeason;
 						} else {
-							unwatched += (nunwatched > 1 ? strToBeAiredPl : strToBeAired);
-							holder.si.setEnabled(false);
+							siText = sNumber +" "+ strSeasons;
 						}
+						String unwatched = "";
+						if (nunwatched == 0) {
+							unwatched = strNoNewEps;
+							if (!serie.getShowStatus().equalsIgnoreCase("null"))
+								unwatched += " ("+ translateStatus(serie.getShowStatus()) +")";
+							holder.si.setEnabled(false);
+						} else {
+							unwatched = nunwatched +" "+ (nunwatched > 1 ? strNewEps : strNewEp) +" ";
+							if (nunwatchedAired > 0) {
+								unwatched = (nunwatchedAired == nunwatched ? "" : nunwatchedAired +" "+ strOf +" ") + unwatched + strEpAired + (nunwatchedAired == nunwatched && ended.isEmpty() ? " \u00b7" : "");
+								holder.si.setEnabled(true);
+							} else {
+								unwatched += (nunwatched > 1 ? strToBeAiredPl : strToBeAired);
+								holder.si.setEnabled(false);
+							}
+						}
+						holder.si.setText(siText +" | "+ unwatched);
 					}
-					holder.si.setText(siText +" | "+ unwatched);
 				}
 				if (holder.sne != null) {
-					if (nunwatched > 0 && !serie.getNextEpisode().isEmpty()) {
+					if (isMovie) {
+						holder.sne.setText("");
+					} else if (nunwatched > 0 && !serie.getNextEpisode().isEmpty()) {
 						holder.sne.setText(serie.getNextEpisode() == null ? "" : serie.getNextEpisode()
 							.replace("[ne]", strNextEp)
 							.replace("[na]", strNextAiring)
@@ -2136,6 +2426,18 @@ public class DroidShows extends ListActivity
 						holder.sne.setEnabled(serie.getNextAir() != null && serie.getNextAir().compareTo(Calendar.getInstance().getTime()) <= 0);
 					} else {
 						holder.sne.setText("");
+					}
+				}
+				if (holder.watched != null) {
+					if (isMovie) {
+						holder.watched.setVisibility(View.VISIBLE);
+						holder.watched.setChecked(nunwatched == 0);
+						holder.watched.setTag(serie);
+						holder.watched.setOnClickListener(movieWatchedListener);
+					} else {
+						holder.watched.setVisibility(View.GONE);
+						holder.watched.setOnClickListener(null);
+						holder.watched.setTag(null);
 					}
 				}
 				if (holder.icon != null) {
@@ -2150,6 +2452,12 @@ public class DroidShows extends ListActivity
 					}
 				}
 			} else {
+				setTextColMargin(holder, false);
+				if (holder.watched != null) {
+					holder.watched.setVisibility(View.GONE);
+					holder.watched.setOnClickListener(null);
+					holder.watched.setTag(null);
+				}
 				if (holder.sn != null) {
 					holder.sn.setText(serie.getName());
 					holder.sn.setTextColor(textViewColors);
@@ -2176,6 +2484,40 @@ public class DroidShows extends ListActivity
 			}
 			return convertView;
 		}
+
+		/* "2026 · 124 min · Watched" — no seasons/episodes talk for movies */
+		private String movieInfoText(TVShowItem movie) {
+			StringBuilder sb = new StringBuilder();
+			String firstAired = movie.getFirstAired();
+			if (firstAired != null && firstAired.length() >= 4 && !firstAired.equalsIgnoreCase("null"))
+				sb.append(firstAired.substring(0, 4));
+			String runtime = movie.getRuntime();
+			if (runtime != null && !runtime.isEmpty() && !runtime.equalsIgnoreCase("null")) {
+				if (sb.length() > 0)
+					sb.append(" \u00b7 ");
+				sb.append(runtime).append(" ").append(getString(R.string.movie_minutes_short));
+			}
+			if (sb.length() > 0)
+				sb.append(" \u00b7 ");
+			sb.append(getString(movie.getUnwatched() == 0 ? R.string.movie_watched : R.string.movie_not_watched));
+			return sb.toString();
+		}
+
+		/* Leave room for the watched checkbox on movie rows */
+		private void setTextColMargin(ViewHolder holder, boolean isMovie) {
+			if (holder.textCol != null) {
+				ViewGroup.MarginLayoutParams tlp = (ViewGroup.MarginLayoutParams) holder.textCol.getLayoutParams();
+				tlp.rightMargin = isMovie ? padding * 70 / 6 : padding * 22 / 6;
+			}
+		}
+
+		private View.OnClickListener movieWatchedListener = new View.OnClickListener() {
+			public void onClick(View v) {
+				Object tag = v.getTag();
+				if (tag instanceof TVShowItem)
+					toggleMovieWatched((TVShowItem) tag);
+			}
+		};
 
 		private OnTouchListener iconTouchListener = new OnTouchListener() {
 			public boolean onTouch(View v, MotionEvent event) {
@@ -2229,5 +2571,7 @@ public class DroidShows extends ListActivity
 		TextView sne;
 		IconView icon;
 		ImageView context;
+		CheckBox watched;
+		LinearLayout textCol;
 	}
 }
