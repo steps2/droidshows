@@ -39,6 +39,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
+import androidx.appcompat.content.res.AppCompatResources;
 import android.view.View.OnClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.CheckedTextView;
@@ -84,7 +85,7 @@ public class AddSerie extends ListActivity
 	/* Options Menu */
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(android.R.drawable.ic_menu_add);
+		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(AppCompatResources.getDrawable(this, R.drawable.ic_menu_add));
 		return super.onCreateOptionsMenu(menu);
 	}
 

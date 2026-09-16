@@ -102,12 +102,19 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.Button;
 import android.widget.ToggleButton;
 import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import nl.asymmetrics.droidshows.ui.HamburgerDrawable;
 
 public class DroidShows extends ListActivity
 {
+	// Load a vector menu icon through AppCompatResources so vectors render on
+	// the whole minSdk-14 range.
+	private android.graphics.drawable.Drawable menuIcon(int resId) {
+		return AppCompatResources.getDrawable(this, resId);
+	}
+
 	// defined in build.gradle either "" for release or "_DEBUG" for debug build
 	// used to allow different configurations between debung and release to protect production data
 	public static final String CONFIG_SUFFIX = BuildConfig.CONFIG_SUFFIX;
@@ -573,18 +580,18 @@ public class DroidShows extends ListActivity
 	/* Options Menu */
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		menu.add(0, UNDO_MENU_ITEM, 0, getString(R.string.menu_undo)).setIcon(android.R.drawable.ic_menu_revert);
-		menu.add(0, FILTER_MENU_ITEM, 0, getString(R.string.menu_filter)).setIcon(android.R.drawable.ic_menu_view);
-		menu.add(0, SEEN_MENU_ITEM, 0, "").setIcon(android.R.drawable.ic_menu_myplaces);
-		menu.add(0, SORT_MENU_ITEM, 0, "");
-		menu.add(0, TOGGLE_ARCHIVE_MENU_ITEM, 0, "");
-		menu.add(0, LOG_MODE_ITEM, 0, getString(R.string.menu_log)).setIcon(android.R.drawable.ic_menu_agenda);
-		menu.add(0, SEARCH_MENU_ITEM, 0, getString(R.string.menu_search)).setIcon(android.R.drawable.ic_menu_search);
-		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(android.R.drawable.ic_menu_add);
-		menu.add(0, UPDATEALL_MENU_ITEM, 0, getString(R.string.menu_update)).setIcon(android.R.drawable.ic_menu_upload);
-		menu.add(0, OPTIONS_MENU_ITEM, 0, getString(R.string.menu_about)).setIcon(android.R.drawable.ic_menu_manage);
-		menu.add(0, BACKUP_NOW_MENU_ITEM, 0, getString(R.string.menu_backup_now)).setIcon(android.R.drawable.ic_menu_save);
-		menu.add(0, EXIT_MENU_ITEM, 0, getString(R.string.menu_exit)).setIcon(android.R.drawable.ic_menu_close_clear_cancel);
+		menu.add(0, UNDO_MENU_ITEM, 0, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
+		menu.add(0, FILTER_MENU_ITEM, 0, getString(R.string.menu_filter)).setIcon(menuIcon(R.drawable.ic_menu_filter_list));
+		menu.add(0, SEEN_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
+		menu.add(0, SORT_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
+		menu.add(0, TOGGLE_ARCHIVE_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_archive));
+		menu.add(0, LOG_MODE_ITEM, 0, getString(R.string.menu_log)).setIcon(menuIcon(R.drawable.ic_menu_history));
+		menu.add(0, SEARCH_MENU_ITEM, 0, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search));
+		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(menuIcon(R.drawable.ic_menu_add));
+		menu.add(0, UPDATEALL_MENU_ITEM, 0, getString(R.string.menu_update)).setIcon(menuIcon(R.drawable.ic_menu_sync));
+		menu.add(0, OPTIONS_MENU_ITEM, 0, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
+		menu.add(0, BACKUP_NOW_MENU_ITEM, 0, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
+		menu.add(0, EXIT_MENU_ITEM, 0, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB)
 			arrangeActionBar(menu);
 		return super.onCreateOptionsMenu(menu);
@@ -669,21 +676,23 @@ public class DroidShows extends ListActivity
 
 		if (showArchive == 1) {
 			menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM)
-				.setIcon(android.R.drawable.ic_menu_today)
+				.setIcon(menuIcon(R.drawable.ic_menu_tv))
 				.setTitle(R.string.menu_show_current);
 		} else {
 			menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM)
-				.setIcon(android.R.drawable.ic_menu_recent_history)
+				.setIcon(menuIcon(R.drawable.ic_menu_archive))
 				.setTitle(R.string.menu_show_archive);
 		}
-		menu.findItem(SEEN_MENU_ITEM).setTitle(excludeSeen ? R.string.menu_include_seen : R.string.menu_exclude_seen);
+		menu.findItem(SEEN_MENU_ITEM)
+			.setIcon(menuIcon(excludeSeen ? R.drawable.ic_menu_visibility_off : R.drawable.ic_menu_visibility))
+			.setTitle(excludeSeen ? R.string.menu_include_seen : R.string.menu_exclude_seen);
 		if (sortOption == SORT_BY_UNSEEN) {
 			menu.findItem(SORT_MENU_ITEM)
-				.setIcon(android.R.drawable.ic_menu_sort_alphabetically)
+				.setIcon(menuIcon(R.drawable.ic_menu_sort_by_alpha))
 				.setTitle(R.string.menu_sort_by_name);
 		} else {
 			menu.findItem(SORT_MENU_ITEM)
-				.setIcon(android.R.drawable.ic_menu_sort_by_size)
+				.setIcon(menuIcon(R.drawable.ic_menu_sort))
 				.setTitle(R.string.menu_sort_by_unseen);
 		}
 		return super.onPrepareOptionsMenu(menu);

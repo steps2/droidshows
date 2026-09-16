@@ -15,7 +15,7 @@
 <string name="menu_search">Search</string>
 <string name="menu_sort_by_name">Sort by name</string>
 <string name="menu_sort_by_unseen">Sort by unseen</string>
-<string name="menu_about">Options</string>
+<string name="menu_about">Settings</string>
 <string name="menu_exit">Exit</string>
 <string name="menu_context_update">Update</string>
 <string name="menu_context_updated">updated</string>
