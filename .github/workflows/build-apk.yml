@@ -24,7 +24,18 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Set up beta signing key
+        env:
+          BETA_KEYSTORE_BASE64: ${{ secrets.BETA_KEYSTORE_BASE64 }}
+        run: |
+          echo "$BETA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/beta-keystore.p12"
+          echo "BETA_KEYSTORE_FILE=$RUNNER_TEMP/beta-keystore.p12" >> "$GITHUB_ENV"
+
       - name: Build debug APK
+        env:
+          BETA_KEYSTORE_PASSWORD: ${{ secrets.BETA_KEYSTORE_PASSWORD }}
+          BETA_KEY_ALIAS: ${{ secrets.BETA_KEY_ALIAS }}
+          BETA_KEY_PASSWORD: ${{ secrets.BETA_KEY_PASSWORD }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK

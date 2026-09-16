@@ -15,6 +15,18 @@ android {
 
         vectorDrawables.useSupportLibrary = true
     }
+    signingConfigs {
+        // Permanent beta signing key: when BETA_KEYSTORE_* env vars are present
+        // (GitHub Actions), every build is signed with the same certificate so
+        // betas install on top of each other. Falls back to the default debug
+        // key when the env vars are absent (local builds).
+        beta {
+            storeFile file(System.getenv("BETA_KEYSTORE_FILE") ?: "debug.keystore")
+            storePassword System.getenv("BETA_KEYSTORE_PASSWORD")
+            keyAlias System.getenv("BETA_KEY_ALIAS") ?: "androiddebugkey"
+            keyPassword System.getenv("BETA_KEY_PASSWORD")
+        }
+    }
     buildTypes {
         release {
             // used to allow different configurations between debung and release to protect production data
@@ -36,6 +48,12 @@ android {
             // to allow 2 different app installs release is seperate from debug
             applicationIdSuffix ".k3b" //  ".debug"
             versionNameSuffix "-DEBUG"
+
+            // Use the permanent beta key when available so every CI build
+            // carries the same signature and installs over previous betas.
+            if (System.getenv("BETA_KEYSTORE_FILE") != null) {
+                signingConfig signingConfigs.beta
+            }
         }
     }
     namespace 'nl.asymmetrics.droidshows'
