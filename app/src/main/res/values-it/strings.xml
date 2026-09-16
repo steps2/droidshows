@@ -48,7 +48,6 @@
 <string name="dialog_restore_now">Ripristinare un backup rimuoverà tutte le informazioni correnti in TVMovie Tracker. Continuare?</string>
 <string name="dialog_restore_done">Database ripristinato con successo</string>
 <string name="dialog_restore_failed">Impossibile ripristinare il database!</string>
-<string name="dialog_restore_notfound">Backup sulla memoria esterna non trovato!</string>
 <string name="dialog_title_delete">Eliminare serie?</string>
 <string name="dialog_delete">Sicuro di voler eliminare %s?</string>
 <string name="dialog_cancel">Annulla</string>

@@ -48,7 +48,6 @@
 <string name="dialog_restore_now">Restoring a backup will remove all information currently in TVMovie Tracker. Continue?</string>
 <string name="dialog_restore_done">Database restored successfully</string>
 <string name="dialog_restore_failed">Unable to restore database!</string>
-<string name="dialog_restore_notfound">Could not find backup on external storage!</string>
 <string name="dialog_title_delete">Delete show?</string>
 <string name="dialog_delete">Are you sure you want to delete %s?</string>
 <string name="dialog_cancel">Cancel</string>
@@ -138,7 +137,6 @@
 <string name="menu_add_movie">Add movie</string>
 	<string name="menu_update_movies">Update movies</string>
 	<string name="menu_filter_movies">Filter movies</string>
-	<string name="menu_restore_backup">Restore backup</string>
 	<string name="menu_backup_now">Back up now</string>
 	<string name="drawer_open">Open library</string>
 	<string name="drawer_close">Close library</string>

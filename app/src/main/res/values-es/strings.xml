@@ -48,7 +48,6 @@
 <string name="dialog_restore_now">Restaurar una copia de seguridad eliminará toda la información que tienes actualmente en TVMovie Tracker. ¿Quieres continuar?</string>
 <string name="dialog_restore_done">Base de datos restaurada correctamente</string>
 <string name="dialog_restore_failed">¡No se ha podido restaurar la base de datos!</string>
-<string name="dialog_restore_notfound">¡No se ha podido encontrar la copia de seguridad en el almacenamiento externo!</string>
 <string name="dialog_title_delete">¿Quieres eliminar la serie?</string>
 <string name="dialog_delete">¿Seguro que quieres borrar %s?</string>
 <string name="dialog_cancel">Cancelar</string>

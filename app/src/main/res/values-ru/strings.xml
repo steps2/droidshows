@@ -48,7 +48,6 @@
 <string name="dialog_restore_now">Востановление безвовратно удалит текущие данные. Продолжить?</string>
 <string name="dialog_restore_done">Данные успешно восстановлены</string>
 <string name="dialog_restore_failed">Невозможно восстановить!</string>
-<string name="dialog_restore_notfound">Резервная копия не найдена на внешнем носителе!</string>
 <string name="dialog_title_delete">Удалить сериал?</string>
 <string name="dialog_delete">Вы действительно хотите удалить %s?</string>
 <string name="dialog_cancel">Отмена</string>

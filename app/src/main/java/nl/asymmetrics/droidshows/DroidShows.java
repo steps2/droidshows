@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -113,7 +112,7 @@ public class DroidShows extends ListActivity
 	// used to allow different configurations between debung and release to protect production data
 	public static final String CONFIG_SUFFIX = BuildConfig.CONFIG_SUFFIX;
 
-	public static final String BACKUP_DIR = "/DroidShows" + CONFIG_SUFFIX;
+	public static final String BACKUP_DIR = "/TVMovie Tracker" + CONFIG_SUFFIX;
 
 	/* Menu Items */
 	private static final int UNDO_MENU_ITEM = Menu.FIRST;
@@ -127,8 +126,7 @@ public class DroidShows extends ListActivity
 	private static final int UPDATEALL_MENU_ITEM = ADD_SERIE_MENU_ITEM + 1;
 	private static final int OPTIONS_MENU_ITEM = UPDATEALL_MENU_ITEM + 1;
 	private static final int EXIT_MENU_ITEM = OPTIONS_MENU_ITEM + 1;
-	private static final int RESTORE_BACKUP_MENU_ITEM = EXIT_MENU_ITEM + 1;
-	private static final int BACKUP_NOW_MENU_ITEM = RESTORE_BACKUP_MENU_ITEM + 1;
+	private static final int BACKUP_NOW_MENU_ITEM = EXIT_MENU_ITEM + 1;
 	private static final int REQ_RESTORE_BACKUP = 1001;
 	private static final int REQ_BACKUP_NOW = 1002;
 	/* Context Menus */
@@ -213,8 +211,6 @@ public class DroidShows extends ListActivity
 	private static View main;
 	public static boolean logMode = false;
 	public static String removeEpisodeFromLog = "";
-	private File[] dirList;
-	private String[] dirNamesList;
 	private Spinner spinner = null;
 	private DrawerLayout drawerLayout;
 	private ListView drawerList;
@@ -239,6 +235,13 @@ public class DroidShows extends ListActivity
 		sharedPrefs = getSharedPreferences(PREF_NAME, 0);
 		autoBackup = sharedPrefs.getBoolean(AUTO_BACKUP_PREF_NAME, false);
 		backupFolder = sharedPrefs.getString(BACKUP_FOLDER_PREF_NAME, Environment.getExternalStorageDirectory() + BACKUP_DIR);
+		// Migrate the stored folder if it still points at the old default location;
+		// a user-customized folder is left untouched.
+		String oldDefaultBackupFolder = Environment.getExternalStorageDirectory() + "/DroidShows" + CONFIG_SUFFIX;
+		if (backupFolder.equals(oldDefaultBackupFolder)) {
+			backupFolder = Environment.getExternalStorageDirectory() + BACKUP_DIR;
+			sharedPrefs.edit().putString(BACKUP_FOLDER_PREF_NAME, backupFolder).apply();
+		}
 		
 		backupVersioning = sharedPrefs.getBoolean(BACKUP_VERSIONING_PREF_NAME, true);
 		excludeSeen = sharedPrefs.getBoolean(EXCLUDE_SEEN_PREF_NAME, false);
@@ -580,7 +583,6 @@ public class DroidShows extends ListActivity
 		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(android.R.drawable.ic_menu_add);
 		menu.add(0, UPDATEALL_MENU_ITEM, 0, getString(R.string.menu_update)).setIcon(android.R.drawable.ic_menu_upload);
 		menu.add(0, OPTIONS_MENU_ITEM, 0, getString(R.string.menu_about)).setIcon(android.R.drawable.ic_menu_manage);
-		menu.add(0, RESTORE_BACKUP_MENU_ITEM, 0, getString(R.string.menu_restore_backup)).setIcon(android.R.drawable.ic_menu_revert);
 		menu.add(0, BACKUP_NOW_MENU_ITEM, 0, getString(R.string.menu_backup_now)).setIcon(android.R.drawable.ic_menu_save);
 		menu.add(0, EXIT_MENU_ITEM, 0, getString(R.string.menu_exit)).setIcon(android.R.drawable.ic_menu_close_clear_cancel);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB)
@@ -715,9 +717,6 @@ public class DroidShows extends ListActivity
 				break;
 			case OPTIONS_MENU_ITEM :
 				aboutDialog();
-				break;
-			case RESTORE_BACKUP_MENU_ITEM :
-				safRestore();
 				break;
 			case BACKUP_NOW_MENU_ITEM :
 				safBackup();
@@ -877,11 +876,11 @@ public class DroidShows extends ListActivity
 		switch(v.getId()) {
 			case R.id.backup:
 				m_AlertDlg.dismiss();
-				backup(false);
+				safBackup();
 				break;
 			case R.id.restore:
 				m_AlertDlg.dismiss();
-				restore();
+				safRestore();
 				break;
 			case R.id.auto_backup:
 				autoBackup ^= true;
@@ -943,107 +942,18 @@ public class DroidShows extends ListActivity
 		updateShowStatsTh.start();
 	}
 
-	private void backup(boolean auto) {
-		if (auto) {
-			backup(auto, backupFolder);
-		} else {
-			File folder = new File(backupFolder);
-			if (!folder.isDirectory())
-				folder.mkdir();
-			filePicker(backupFolder, false);
-		}
-	}
-
-	private void restore() {
-		filePicker(backupFolder, true);
-	}
-
-	private void filePicker(final String folderString, final boolean restoring) {
-		File folder = new File(folderString);
-		File[] tempDirList = dirContents(folder, restoring);
-		int showParent = (folderString.equals(Environment.getExternalStorageDirectory().getPath()) ? 0 : 1);
-		dirList = new File[tempDirList.length + showParent];
-		dirNamesList = new String[tempDirList.length + showParent];
-		if (showParent == 1) {
-			dirList[0] = folder.getParentFile();
-			dirNamesList[0] = "..";
-		}
-		for(int i = 0; i < tempDirList.length; i++) {
-			dirList[i + showParent] = tempDirList[i];
-			dirNamesList[i + showParent] = tempDirList[i].getName();
-			if (restoring && tempDirList[i].isFile())
-				dirNamesList[i + showParent] += " ("+ SimpleDateFormat.getDateTimeInstance(SimpleDateFormat.DEFAULT, SimpleDateFormat.SHORT).format(tempDirList[i].lastModified()) +")";
-		}
-		AlertDialog.Builder filePicker = new AlertDialog.Builder(this)
-			.setTitle(folder.toString())
-			.setItems(dirNamesList, new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int which) {
-					File chosenFile = dirList[which];
-					if (chosenFile.isDirectory()) {
-						filePicker(chosenFile.toString(), restoring);
-					} else if (restoring) {
-						confirmRestore(chosenFile.toString());
-					}
-				}
-			})
-			.setNegativeButton(R.string.dialog_cancel, new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int which) {
-					dialog.dismiss();
-				}
-			});
-
-		if (!restoring)
-			filePicker.setPositiveButton(R.string.dialog_backup, new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int which) {
-					backup(false, folderString);
-				}
-			});
-		filePicker.show();
-	}
-
-	private File[] dirContents(File folder, final boolean showFiles)  {
-		if (folder.exists()) {
-			FilenameFilter filter = new FilenameFilter() {
-				public boolean accept(File dir, String filename) {
-					File file = new File(dir.getAbsolutePath() + File.separator + filename);
-					if (showFiles)
-						return file.isDirectory()
-							|| file.isFile() && file.getName().toLowerCase().indexOf("droidshows.db") == 0;
-					else
-						return file.isDirectory();
-				}
-			};
-			File[] list = folder.listFiles(filter);
-			if (list != null)
-				Arrays.sort(list, filesComperator);
-			return list == null ? new File[0] : list;
-		} else {
-			return new File[0];
-		}
-	}
-
-	private static Comparator<File> filesComperator = new Comparator<File>() {
-		public int compare(File f1, File f2) {
-			if (f1.isDirectory() && !f2.isDirectory())
-				return 1;
-			if (f2.isDirectory() && !f1.isDirectory())
-				return -1;
-			return f1.getName().compareToIgnoreCase(f2.getName());
-		}
-	};
-
 	private void backup(boolean auto, final String backupFolder) {
 		File source = new File(getApplicationInfo().dataDir +"/databases/DroidShows.db");
-		File destination = new File(backupFolder, "DroidShows.db");
+		File destination = new File(backupFolder, "TVMovie Tracker.db");
 		if (auto && (!autoBackup ||
 				new SimpleDateFormat("yyyy-MM-dd")
 					.format(destination.lastModified()).equals(lastStatsUpdateCurrent) ||
 				source.lastModified() == destination.lastModified()))
 			return;
 		if (backupVersioning && destination.exists()) {
-			File previous0 = new File(backupFolder, "DroidShows.db0");
+			File previous0 = new File(backupFolder, "TVMovie Tracker.db0");
 			if (previous0.exists()) {
-				File previous1 = new File(backupFolder, "DroidShows.db1");
+				File previous1 = new File(backupFolder, "TVMovie Tracker.db1");
 				if (previous1.exists())
 					previous1.delete();
 				previous0.renameTo(previous1);
@@ -1080,46 +990,6 @@ public class DroidShows extends ListActivity
 		}
 	}
 
-	private void confirmRestore(final String backupFile) {
-		new AlertDialog.Builder(DroidShows.this)
-			.setTitle(R.string.dialog_restore)
-			.setMessage(R.string.dialog_restore_now)
-			.setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
-				public void onClick(DialogInterface dialog, int id) {
-					restore(backupFile);
-					}
-				})
-			.setNegativeButton(R.string.dialog_cancel, null)
-			.show();
-	}
-
-	private void restore(String backupFile) {
-		String toastTxt = getString(R.string.dialog_restore_done);
-		File source = new File(backupFile);
-		if (source.exists()) {
-			File destination = new File(getApplicationInfo().dataDir +"/databases", "DroidShows.db");
-			try {
-				copy(source, destination);
-				updateDS.updateDroidShows();
-				File thumbs[] = new File(getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs/banners/posters").listFiles();
-				if (thumbs != null)
-					for (File thumb : thumbs)
-						thumb.delete();
-				for (File file : new File(getApplicationInfo().dataDir +"/databases").listFiles())
-				    if (!file.getName().equalsIgnoreCase("DroidShows.db")) file.delete();
-				updateAllSeries(2);	// 2 = update archive and current shows
-				undo.clear();
-				toastTxt += " ("+ source.getPath() +")";
-			} catch (IOException e) {
-				toastTxt = getString(R.string.dialog_restore_failed);
-				e.printStackTrace();
-			}
-		} else {
-			toastTxt = getString(R.string.dialog_restore_notfound);
-		}
-		Toast.makeText(getApplicationContext(), toastTxt, Toast.LENGTH_LONG).show();
-	}
-
 	private void copy(File source, File destination) throws IOException {
 		if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
 			if (asyncInfo != null)
@@ -1146,11 +1016,12 @@ public class DroidShows extends ListActivity
 	}
 
 	/* Storage Access Framework backup/restore (API 19+): pick any document as
-	 * the backup source/destination instead of the legacy /DroidShows folder.
-	 * The legacy folder-based backup/restore stays available in Options. */
+	 * the backup source/destination instead of the legacy /TVMovie Tracker folder.
+	 * Direct file I/O below (backup(auto, folder), copy) now serves only the
+	 * auto-backup and the pre-database-update safety backup. */
 	private void safRestore() {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-			restore();	// legacy folder-based restore on old Android versions
+			Toast.makeText(getApplicationContext(), R.string.saf_not_supported, Toast.LENGTH_LONG).show();
 			return;
 		}
 		try {
@@ -1165,14 +1036,14 @@ public class DroidShows extends ListActivity
 
 	private void safBackup() {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-			backup(false);	// legacy folder-based backup on old Android versions
+			backup(false, backupFolder);	// legacy folder-based backup on old Android versions
 			return;
 		}
 		try {
 			Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
 			intent.addCategory(Intent.CATEGORY_OPENABLE);
 			intent.setType("application/octet-stream");
-			intent.putExtra(Intent.EXTRA_TITLE, "DroidShows.db");
+			intent.putExtra(Intent.EXTRA_TITLE, "TVMovie Tracker.db");
 			startActivityForResult(intent, REQ_BACKUP_NOW);
 		} catch (Exception e) {
 			Toast.makeText(getApplicationContext(), R.string.saf_not_supported, Toast.LENGTH_LONG).show();
@@ -2141,7 +2012,7 @@ public class DroidShows extends ListActivity
 		boolean updating = (updateShowTh != null && updateShowTh.isAlive())
 			|| (updateAllShowsTh != null && updateAllShowsTh.isAlive());
 		if (autoBackup && !updating && asyncInfo.getStatus() != AsyncTask.Status.RUNNING)	// not updating
-			backup(true);
+			backup(true, backupFolder);
 		super.onStop();
 	}
 

@@ -48,7 +48,6 @@
 <string name="dialog_restore_now">Während der Datenwiederherstellung werden alle Daten in TVMovie Tracker überschrieben. Fortfahren?</string>
 <string name="dialog_restore_done">Datenwiederherstellung fertig</string>
 <string name="dialog_restore_failed">Datenwiederherstellung fehlgeschlagen!</string>
-<string name="dialog_restore_notfound">Sicherungskopie nicht gefunden!</string>
 <string name="dialog_title_delete">Serie löschen?</string>
 <string name="dialog_delete">Soll %s wirklich gelöscht?</string>
 <string name="dialog_cancel">Abbrechen</string>
