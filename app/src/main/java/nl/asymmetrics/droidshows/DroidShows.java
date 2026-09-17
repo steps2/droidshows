@@ -684,31 +684,32 @@ public class DroidShows extends AppCompatActivity
 	/* Options Menu */
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		menu.add(0, UNDO_MENU_ITEM, 0, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
-		menu.add(0, FILTER_MENU_ITEM, 0, getString(R.string.menu_filter)).setIcon(menuIcon(R.drawable.ic_menu_filter_list));
-		menu.add(0, SEEN_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
-		menu.add(0, SORT_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
-		menu.add(0, TOGGLE_ARCHIVE_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_archive));
-		menu.add(0, LOG_MODE_ITEM, 0, getString(R.string.menu_log)).setIcon(menuIcon(R.drawable.ic_menu_history));
-		menu.add(0, SEARCH_MENU_ITEM, 0, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search));
-		menu.add(0, ADD_SERIE_MENU_ITEM, 0, getString(R.string.menu_add_serie)).setIcon(menuIcon(R.drawable.ic_menu_add));
-		menu.add(0, UPDATEALL_MENU_ITEM, 0, getString(R.string.menu_update)).setIcon(menuIcon(R.drawable.ic_menu_sync));
-		menu.add(0, OPTIONS_MENU_ITEM, 0, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
-		menu.add(0, BACKUP_NOW_MENU_ITEM, 0, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
-		menu.add(0, EXIT_MENU_ITEM, 0, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB)
-			arrangeActionBar(menu);
+		// Only the search action lives in the toolbar now; everything else moved to the + button popup.
+		menu.add(0, SEARCH_MENU_ITEM, 0, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search))
+			.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 		return super.onCreateOptionsMenu(menu);
-	}
-
-	private void arrangeActionBar(Menu menu) {
-		menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM).setVisible(false);
-		menu.findItem(LOG_MODE_ITEM).setVisible(false);
-		menu.findItem(SEARCH_MENU_ITEM).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 	}
 
 	@Override
 	public boolean onPrepareOptionsMenu(Menu menu) {
+		return super.onPrepareOptionsMenu(menu);
+	}
+
+	/* Everything that used to live in the ⋮ overflow now lives in the + button popup. */
+	private void populatePlusMenu(Menu menu) {
+		menu.add(0, ADD_SERIE_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_add));
+		menu.add(0, SEARCH_MENU_ITEM, 1, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search));
+		menu.add(0, UPDATEALL_MENU_ITEM, 2, "").setIcon(menuIcon(R.drawable.ic_menu_sync));
+		menu.add(0, FILTER_MENU_ITEM, 3, "").setIcon(menuIcon(R.drawable.ic_menu_filter_list));
+		menu.add(0, SORT_MENU_ITEM, 4, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
+		menu.add(0, SEEN_MENU_ITEM, 5, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
+		menu.add(0, UNDO_MENU_ITEM, 6, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
+		menu.add(0, OPTIONS_MENU_ITEM, 7, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
+		menu.add(0, BACKUP_NOW_MENU_ITEM, 8, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
+		menu.add(0, EXIT_MENU_ITEM, 9, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
+	}
+
+	private void preparePlusMenu(Menu menu) {
 		menu.findItem(UNDO_MENU_ITEM)
 			.setVisible(undo.size() > 0);
 		menu.findItem(UPDATEALL_MENU_ITEM)
@@ -723,23 +724,7 @@ public class DroidShows extends AppCompatActivity
 			.setEnabled(!logMode && !searching());
 		menu.findItem(SORT_MENU_ITEM)
 			.setEnabled(!logMode);
-		menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM)
-			.setEnabled(!logMode && !searching());
-		menu.findItem(LOG_MODE_ITEM)
-			.setEnabled(!searching())
-			.setTitle((!logMode ? R.string.menu_log : R.string.menu_close_log));
-		menu.findItem(UPDATEALL_MENU_ITEM)
-			.setEnabled(!logMode);
 
-		if (showArchive == 1) {
-			menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM)
-				.setIcon(menuIcon(R.drawable.ic_menu_tv))
-				.setTitle(R.string.menu_show_current);
-		} else {
-			menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM)
-				.setIcon(menuIcon(R.drawable.ic_menu_archive))
-				.setTitle(R.string.menu_show_archive);
-		}
 		menu.findItem(SEEN_MENU_ITEM)
 			.setIcon(menuIcon(excludeSeen ? R.drawable.ic_menu_visibility_off : R.drawable.ic_menu_visibility))
 			.setTitle(excludeSeen ? R.string.menu_include_seen : R.string.menu_exclude_seen);
@@ -752,7 +737,26 @@ public class DroidShows extends AppCompatActivity
 				.setIcon(menuIcon(R.drawable.ic_menu_sort))
 				.setTitle(R.string.menu_sort_by_unseen);
 		}
-		return super.onPrepareOptionsMenu(menu);
+	}
+
+	public void showPlusMenu(View v) {
+		androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, v);
+		populatePlusMenu(popup.getMenu());
+		preparePlusMenu(popup.getMenu());
+		try {
+			java.lang.reflect.Field f = popup.getClass().getDeclaredField("mPopup");
+			f.setAccessible(true);
+			Object helper = f.get(popup);
+			helper.getClass().getDeclaredMethod("setForceShowIcon", boolean.class).invoke(helper, true);
+		} catch (Exception e) {
+			Log.w("DroidShows", "Could not enable popup menu icons", e);
+		}
+		popup.setOnMenuItemClickListener(new androidx.appcompat.widget.PopupMenu.OnMenuItemClickListener() {
+			public boolean onMenuItemClick(MenuItem item) {
+				return onOptionsItemSelected(item);
+			}
+		});
+		popup.show();
 	}
 
 	@Override
