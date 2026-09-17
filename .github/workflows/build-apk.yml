@@ -36,7 +36,16 @@ jobs:
           BETA_KEYSTORE_PASSWORD: ${{ secrets.BETA_KEYSTORE_PASSWORD }}
           BETA_KEY_ALIAS: ${{ secrets.BETA_KEY_ALIAS }}
           BETA_KEY_PASSWORD: ${{ secrets.BETA_KEY_PASSWORD }}
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/build-output.log"
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-log
+          path: ${{ runner.temp }}/build-output.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
