@@ -48,6 +48,7 @@
 <string name="theme_light">Licht</string>
 <string name="theme_dark">Donker</string>
 <string name="theme_amoled">AMOLED-zwart</string>
+<string name="crash_title">De app is gecrasht</string>
 <string name="dialog_use_mirror">Gebruik TheTVDB mirror (probeer dit als updates te langzaam gaan)</string>
 <string name="dialog_restore">Herstellen</string>
 <string name="dialog_restore_now">Het herstellen van een database zal de huidige informatie in TVMovie Tracker verwijderen. Doorgaan?</string>

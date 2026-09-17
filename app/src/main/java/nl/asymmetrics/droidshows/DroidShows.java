@@ -8,6 +8,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -261,6 +266,7 @@ public class DroidShows extends AppCompatActivity
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		installCrashReporter();
 		// Apply the saved theme before the window is created.
 		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
 		if (themeMode == THEME_AMOLED) {
@@ -281,7 +287,13 @@ public class DroidShows extends AppCompatActivity
 		setContentView(R.layout.main);
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
+		if (savedInstanceState != null) {
+			showArchive = savedInstanceState.getInt("showArchive");
+			mediaType = savedInstanceState.getInt("mediaType", 0);
+		}
 		setupDrawer();
+		setupToolbar();
+		showLastCrashIfAny();
 
 		// Preferences
 		sharedPrefs = getSharedPreferences(PREF_NAME, 0);
@@ -358,8 +370,6 @@ public class DroidShows extends AppCompatActivity
 			}
 		});
 		if (savedInstanceState != null) {
-			showArchive = savedInstanceState.getInt("showArchive");
-			mediaType = savedInstanceState.getInt("mediaType", 0);
 			getSeries((savedInstanceState.getBoolean("searching") ? 2 : showArchive));
 		} else {
 			getSeries();
@@ -394,6 +404,86 @@ public class DroidShows extends AppCompatActivity
 			}
 		});
 		navView.setCheckedItem(mediaType == 1 ? R.id.nav_movies : R.id.nav_tv);
+	}
+
+	/* Toolbar, tabs and drawer toggle must be set up in onCreate (not in
+	 * onCreateOptionsMenu): with the NoActionBar Material3 theme the framework
+	 * never calls onCreateOptionsMenu until a support action bar exists. */
+	private void setupToolbar() {
+		MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
+		setSupportActionBar(toolbar);
+		if (getSupportActionBar() != null)
+			getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+		final TabLayout modeTabs = (TabLayout) findViewById(R.id.mode_tabs);
+		modeTabs.clearOnTabSelectedListeners();
+		TabLayout.Tab tab = modeTabs.getTabAt(logMode ? 2 : showArchive);
+		if (tab != null) tab.select();
+		modeTabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+			public void onTabSelected(TabLayout.Tab tab) {
+				int position = tab.getPosition();
+				logMode = position == 2;
+				showArchive = (position == 2 ? showArchive : position);
+				if (logMode) clearFilter(null);
+				getSeries();
+			}
+			public void onTabUnselected(TabLayout.Tab tab) {}
+			public void onTabReselected(TabLayout.Tab tab) {}
+		});
+		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close);
+		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow (beta-3 behavior preserved).
+		HamburgerDrawable hamburger = new HamburgerDrawable(this);
+		hamburger.setColor(drawerToggle.getDrawerArrowDrawable().getColor());
+		drawerToggle.setDrawerArrowDrawable(hamburger);
+		drawerLayout.addDrawerListener(drawerToggle);
+	}
+
+	/* Persist uncaught exceptions so the next launch can show what crashed. */
+	private static final String CRASH_FILE = "tvmovie-crash.txt";
+
+	private void installCrashReporter() {
+		final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+		Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+			public void uncaughtException(Thread t, Throwable e) {
+				try {
+					StringWriter sw = new StringWriter();
+					e.printStackTrace(new PrintWriter(sw));
+					FileWriter w = new FileWriter(new File(getExternalFilesDir(null), CRASH_FILE));
+					w.write(Build.MODEL + " / Android " + Build.VERSION.RELEASE + "\n" + sw.toString());
+					w.close();
+				} catch (Exception ignored) {}
+				if (previous != null) previous.uncaughtException(t, e);
+			}
+		});
+	}
+
+	private void showLastCrashIfAny() {
+		try {
+			final File f = new File(getExternalFilesDir(null), CRASH_FILE);
+			if (!f.exists()) return;
+			StringBuilder sb = new StringBuilder();
+			BufferedReader r = new BufferedReader(new FileReader(f));
+			String line;
+			while ((line = r.readLine()) != null) sb.append(line).append('\n');
+			r.close();
+			f.delete();
+			final String trace = sb.toString();
+			main.post(new Runnable() {
+				public void run() {
+					TextView tv = new TextView(DroidShows.this);
+					tv.setText(trace);
+					tv.setTextIsSelectable(true);
+					int pad = (int) (16 * getResources().getDisplayMetrics().density);
+					tv.setPadding(pad, pad, pad, pad);
+					ScrollView sv = new ScrollView(DroidShows.this);
+					sv.addView(tv);
+					new MaterialAlertDialogBuilder(DroidShows.this)
+						.setTitle(R.string.crash_title)
+						.setView(sv)
+						.setPositiveButton(android.R.string.ok, null)
+						.show();
+				}
+			});
+		} catch (Exception ignored) {}
 	}
 
 	@Override
@@ -632,29 +722,6 @@ public class DroidShows extends AppCompatActivity
 		menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM).setVisible(false);
 		menu.findItem(LOG_MODE_ITEM).setVisible(false);
 		menu.findItem(SEARCH_MENU_ITEM).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-		MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
-		setSupportActionBar(toolbar);
-		final TabLayout modeTabs = (TabLayout) findViewById(R.id.mode_tabs);
-		modeTabs.clearOnTabSelectedListeners();
-		TabLayout.Tab tab = modeTabs.getTabAt(logMode ? 2 : showArchive);
-		if (tab != null) tab.select();
-		modeTabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
-			public void onTabSelected(TabLayout.Tab tab) {
-				int position = tab.getPosition();
-				logMode = position == 2;
-				showArchive = (position == 2 ? showArchive : position);
-				if (logMode) clearFilter(null);
-				getSeries();
-			}
-			public void onTabUnselected(TabLayout.Tab tab) {}
-			public void onTabReselected(TabLayout.Tab tab) {}
-		});
-		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close);
-		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow (beta-3 behavior preserved).
-		HamburgerDrawable hamburger = new HamburgerDrawable(this);
-		hamburger.setColor(drawerToggle.getDrawerArrowDrawable().getColor());
-		drawerToggle.setDrawerArrowDrawable(hamburger);
-		drawerLayout.addDrawerListener(drawerToggle);
 	}
 
 	@Override

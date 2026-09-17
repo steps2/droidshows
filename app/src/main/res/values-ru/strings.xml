@@ -48,6 +48,7 @@
 <string name="theme_light">Светлая</string>
 <string name="theme_dark">Тёмная</string>
 <string name="theme_amoled">Чёрный AMOLED</string>
+<string name="crash_title">Приложение аварийно завершилось</string>
 <string name="dialog_use_mirror">Используйте TheTVDb зеркало (попробуйте так, если обновления слишком медленны)</string>
 <string name="dialog_restore">Восстановить</string>
 <string name="dialog_restore_now">Востановление безвовратно удалит текущие данные. Продолжить?</string>

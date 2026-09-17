@@ -47,6 +47,7 @@
 <string name="theme_light">Chiaro</string>
 <string name="theme_dark">Scuro</string>
 <string name="theme_amoled">Nero AMOLED</string>
+<string name="crash_title">L0027app si è bloccata</string>
 <string name="dialog_backup_usefolder">Usa per seguridad diaria</string>
 <string name="dialog_use_mirror">Usa un mirror di TheTVDB (prova questo nel caso gli aggiornamenti siano lenti)</string>
 <string name="dialog_restore">Ripristina</string>

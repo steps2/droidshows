@@ -48,6 +48,7 @@
 <string name="theme_light">Claro</string>
 <string name="theme_dark">Oscuro</string>
 <string name="theme_amoled">Negro AMOLED</string>
+<string name="crash_title">La aplicación se bloqueó</string>
 <string name="dialog_use_mirror">Utilizar el mirror TheTVDB (Intenta esto si las actualizaciones son demasiado lentas)</string>
 <string name="dialog_restore">Restaurar</string>
 <string name="dialog_restore_now">Restaurar una copia de seguridad eliminará toda la información que tienes actualmente en TVMovie Tracker. ¿Quieres continuar?</string>
