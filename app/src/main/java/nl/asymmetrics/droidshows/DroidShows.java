@@ -47,13 +47,10 @@ import nl.asymmetrics.droidshows.utils.Update;
 import nl.asymmetrics.droidshows.utils.Utils;
 import nl.asymmetrics.droidshows.utils.SQLiteStore.NextEpisode;
 import android.annotation.SuppressLint;
-import android.app.ActionBar;
-import android.app.AlertDialog;
-import android.app.ListActivity;
+import androidx.appcompat.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.ProgressDialog;
 import android.app.SearchManager;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -91,7 +88,6 @@ import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -100,20 +96,26 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.Button;
 import android.widget.ToggleButton;
 import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.google.android.material.navigation.NavigationView;
+import com.google.android.material.tabs.TabLayout;
 import nl.asymmetrics.droidshows.ui.HamburgerDrawable;
 
-public class DroidShows extends ListActivity
+public class DroidShows extends AppCompatActivity
 {
 	// Load a vector menu icon through AppCompatResources so vectors render on
 	// the whole minSdk-14 range.
@@ -170,10 +172,13 @@ public class DroidShows extends ListActivity
 	private static final int SYNOPSIS_LANGUAGE = UPDATE_CONTEXT + 1;
 	private static final int DELETE_CONTEXT = SYNOPSIS_LANGUAGE + 1;
 	private static AlertDialog m_AlertDlg;
-	private static ProgressDialog m_ProgressDialog = null;
-	private static ProgressDialog updateAllSeriesPD = null;
+	private static androidx.appcompat.app.AlertDialog m_ProgressDialog = null;
+	private static TextView m_ProgressMsg = null;
+	private static AlertDialog updateAllSeriesDlg = null;
+	private static TextView updateAllSeriesMsg = null;
+	private static LinearProgressIndicator updateAllSeriesBar = null;
 	// Pull-to-refresh: swipe-triggered runs show the SwipeRefreshLayout spinner
-	// instead of the modal ProgressDialog.
+	// instead of the modal progress dialog.
 	private SwipeRefreshLayout swipeRefresh = null;
 	private boolean swipeTriggered = false;
 	private volatile boolean updatingAll = false;
@@ -183,6 +188,11 @@ public class DroidShows extends ListActivity
 	private Utils utils = new Utils();
 	private Update updateDS;
 	private static final String PREF_NAME = "DroidShowsPref";
+	private static final String THEME_PREF_NAME = "theme";
+	private static final int THEME_AUTOMATIC = 0;
+	private static final int THEME_LIGHT = 1;
+	private static final int THEME_DARK = 2;
+	private static final int THEME_AMOLED = 3;
 	private SharedPreferences sharedPrefs;
 	private static final String AUTO_BACKUP_PREF_NAME = "auto_backup";
 	private static boolean autoBackup;
@@ -245,13 +255,21 @@ public class DroidShows extends ListActivity
 	private static View main;
 	public static boolean logMode = false;
 	public static String removeEpisodeFromLog = "";
-	private Spinner spinner = null;
 	private DrawerLayout drawerLayout;
-	private ListView drawerList;
+	private NavigationView navView;
 	private ActionBarDrawerToggle drawerToggle;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		// Apply the saved theme before the window is created.
+		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
+		if (themeMode == THEME_AMOLED) {
+			AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+			setTheme(R.style.Theme_TVMovieTracker_Amoled);
+		} else {
+			AppCompatDelegate.setDefaultNightMode(themeMode == THEME_LIGHT ? AppCompatDelegate.MODE_NIGHT_NO : themeMode == THEME_DARK ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
+			setTheme(R.style.Theme_TVMovieTracker);
+		}
 		super.onCreate(savedInstanceState);
 		if (!isTaskRoot()) {	// Prevent multiple instances: https://stackoverflow.com/a/11042163
 			final Intent intent = getIntent();
@@ -316,13 +334,18 @@ public class DroidShows extends ListActivity
 			networks = new ArrayList<String>(Arrays.asList(networksStr.replace("[", "").replace("]", "").split(", ")));
 		series = new ArrayList<TVShowItem>();
 		seriesAdapter = new SeriesAdapter(this, R.layout.row, series);
-		setListAdapter(seriesAdapter);
-		listView = (BounceListView) getListView();
+		listView = (BounceListView) findViewById(android.R.id.list);
+		listView.setEmptyView(findViewById(android.R.id.empty));
+		listView.setAdapter(seriesAdapter);
+		listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+				onListItemClick((ListView) parent, view, position, id);
+			}
+		});
 		listView.setDivider(null);
 		listView.setOverscrollHeader(getResources().getDrawable(R.drawable.shape_gradient_ring));
 		swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
-		swipeRefresh.setColorSchemeResources(android.R.color.holo_blue_bright,
-			android.R.color.holo_green_light, android.R.color.holo_orange_light, android.R.color.holo_red_light);
+		swipeRefresh.setColorSchemeResources(R.color.swipe_m3_1, R.color.swipe_m3_2, R.color.swipe_m3_3);
 		swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
 			@Override
 			public void onRefresh() {
@@ -358,67 +381,19 @@ public class DroidShows extends ListActivity
 		vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 	}
 
-	/* Navigation drawer: TV Shows / Movies. The drawer replaces the media
-	 * spinner that used to sit in the ActionBar; Watching / Finished / Log
-	 * is back to being the only ActionBar spinner, in its original spot. */
+	/* Navigation drawer: TV Shows / Movies, backed by a NavigationView. */
 	private void setupDrawer() {
 		drawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-		drawerList = (ListView) findViewById(R.id.drawer_list);
-		drawerList.setAdapter(new DrawerAdapter());
-		drawerList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				drawerList.setItemChecked(position, true);
-				drawerLayout.closeDrawer(drawerList);
-				if (position != mediaType) {
-					mediaType = position;
-					getSeries();
-				}
+		navView = (NavigationView) findViewById(R.id.nav_view);
+		navView.setNavigationItemSelectedListener(new NavigationView.OnNavigationItemSelectedListener() {
+			@Override public boolean onNavigationItemSelected(MenuItem item) {
+				int position = (item.getItemId() == R.id.nav_movies) ? 1 : 0;
+				drawerLayout.closeDrawer(navView);
+				if (position != mediaType) { mediaType = position; getSeries(); }
+				return true;
 			}
 		});
-		drawerList.setItemChecked(mediaType, true);
-	}
-
-	private class DrawerAdapter extends ArrayAdapter<String> {
-		private final String[] labels = new String[] {
-			getString(R.string.media_tv_shows),
-			getString(R.string.media_movies),
-		};
-		private final int[] icons = new int[] {
-			R.drawable.ic_drawer_tv,
-			R.drawable.ic_drawer_movie,
-		};
-		// Light-grey tint for the outline drawer icons on the app's dark theme.
-		// Kept as a constant on purpose: the app's custom theme does not define
-		// android:textColorSecondary, so resolving it via TypedValue yielded 0,
-		// i.e. a fully transparent tint that rendered the icons invisible.
-		private static final int ICON_TINT = 0xFFBDBDBD;
-
-		public DrawerAdapter() {
-			super(DroidShows.this, R.layout.drawer_row);
-		}
-
-		@Override
-		public int getCount() {
-			return labels.length;
-		}
-
-		@Override
-		public View getView(int position, View convertView, ViewGroup parent) {
-			if (convertView == null) {
-				LayoutInflater vi = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-				convertView = vi.inflate(R.layout.drawer_row, parent, false);
-			}
-			((TextView) convertView.findViewById(R.id.drawer_label)).setText(labels[position]);
-			ImageView iconView = (ImageView) convertView.findViewById(R.id.drawer_icon);
-			iconView.setImageResource(icons[position]);
-			Drawable d = iconView.getDrawable();
-			if (d != null) {
-				d = DrawableCompat.wrap(d.mutate());
-				DrawableCompat.setTint(d, ICON_TINT);
-				iconView.setImageDrawable(d);
-			}
-			return convertView;
-		}
+		navView.setCheckedItem(mediaType == 1 ? R.id.nav_movies : R.id.nav_tv);
 	}
 
 	@Override
@@ -440,7 +415,7 @@ public class DroidShows extends ListActivity
 	 * after the database upgrade that added the tvmazeId column: for every TV
 	 * show row without a tvmazeId, resolve the old TheTVDB id via TVMaze,
 	 * fetch the full show and update the database. Runs in a background
-	 * thread with a horizontal ProgressDialog. Failures are collected and
+	 * thread with a horizontal Material progress dialog. Failures are collected and
 	 * reported via errorNotify at the end; anything left unmigrated is
 	 * resolved lazily on the next manual update (see updateSerie).
 	 */
@@ -466,14 +441,16 @@ public class DroidShows extends ListActivity
 			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
 			return;
 		}
-		final ProgressDialog migPD = new ProgressDialog(this);
-		migPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-		migPD.setTitle(R.string.msg_migrating);
-		migPD.setMessage(getString(R.string.msg_migrating_wait));
-		migPD.setCancelable(false);
-		migPD.setMax(toMigrate.size());
-		migPD.setProgress(0);
-		migPD.show();
+		View migView = View.inflate(DroidShows.this, R.layout.progress_dialog, null);
+		final TextView migMsg = (TextView) migView.findViewById(R.id.progress_msg);
+		final LinearProgressIndicator migBar =
+			(LinearProgressIndicator) migView.findViewById(R.id.progress_bar);
+		migMsg.setText(getString(R.string.msg_migrating_wait));
+		migBar.setMax(toMigrate.size());
+		migBar.setProgress(0);
+		final AlertDialog migDlg = new MaterialAlertDialogBuilder(DroidShows.this)
+			.setTitle(R.string.msg_migrating).setView(migView).setCancelable(false).create();
+		migDlg.show();
 		final ExecutorService migExec = Executors.newFixedThreadPool(3);
 		final AtomicInteger migProgress = new AtomicInteger(0);
 		final ConcurrentLinkedQueue<String> migFailures = new ConcurrentLinkedQueue<String>();
@@ -500,7 +477,7 @@ public class DroidShows extends ListActivity
 					}
 					final int progress = migProgress.incrementAndGet();
 					runOnUiThread(new Runnable() {
-						public void run() {migPD.setProgress(progress);}
+						public void run() {migBar.setProgress(progress);}
 					});
 				}
 			});
@@ -518,7 +495,7 @@ public class DroidShows extends ListActivity
 				final String failedResult = failedSb.toString();
 				runOnUiThread(new Runnable() {
 					public void run() {
-						migPD.dismiss();
+						migDlg.dismiss();
 						getSeries();
 						if (failedResult.length() > 0)
 							errorNotify(failedResult);
@@ -651,53 +628,29 @@ public class DroidShows extends ListActivity
 		return super.onCreateOptionsMenu(menu);
 	}
 
-	@SuppressLint("NewApi")
 	private void arrangeActionBar(Menu menu) {
 		menu.findItem(TOGGLE_ARCHIVE_MENU_ITEM).setVisible(false);
 		menu.findItem(LOG_MODE_ITEM).setVisible(false);
 		menu.findItem(SEARCH_MENU_ITEM).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-		final Spinner modeSpinner = new Spinner(this);	// Watching / Finished / Log
-		spinner = modeSpinner;	// legacy handle used by onBackPressed
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-			modeSpinner.setPopupBackgroundResource(R.drawable.menu_dropdown_panel);
-		}
-		modeSpinner.setAdapter(new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1,
-			new String[] {
-				getString(R.string.mode_watching),
-				getString(R.string.mode_finished),
-				getString(R.string.menu_log),
-			}) {
-			@Override
-			public View getView(int position, View convertView, ViewGroup parent) {
-				View view = super.getView(position, convertView, parent);
-				((TextView) view).setTextColor(getColor(android.R.color.primary_text_dark));
-				return view;
+		MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
+		setSupportActionBar(toolbar);
+		final TabLayout modeTabs = (TabLayout) findViewById(R.id.mode_tabs);
+		modeTabs.clearOnTabSelectedListeners();
+		TabLayout.Tab tab = modeTabs.getTabAt(logMode ? 2 : showArchive);
+		if (tab != null) tab.select();
+		modeTabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+			public void onTabSelected(TabLayout.Tab tab) {
+				int position = tab.getPosition();
+				logMode = position == 2;
+				showArchive = (position == 2 ? showArchive : position);
+				if (logMode) clearFilter(null);
+				getSeries();
 			}
+			public void onTabUnselected(TabLayout.Tab tab) {}
+			public void onTabReselected(TabLayout.Tab tab) {}
 		});
-		modeSpinner.setSelection(logMode ? 2 : showArchive);
-		listView.postDelayed(new Runnable() {
-			public void run() {
-				modeSpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
-					public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
-						logMode = position == 2;
-						showArchive = (position == 2 ? showArchive : position);
-						if (logMode)
-							clearFilter(null);
-						getSeries();
-					}
-					public void onNothingSelected(AdapterView<?> arg0) {
-					}
-				});
-			}
-		}, 1000);
-		ActionBar actionBar = getActionBar();
-		actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME | ActionBar.DISPLAY_HOME_AS_UP);
-		actionBar.setCustomView(modeSpinner);
-		actionBar.setHomeButtonEnabled(true);
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-			actionBar.setIcon(R.drawable.actionbar);
-		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, R.string.drawer_open, R.string.drawer_close);
-		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow.
+		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close);
+		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow (beta-3 behavior preserved).
 		HamburgerDrawable hamburger = new HamburgerDrawable(this);
 		hamburger.setColor(drawerToggle.getDrawerArrowDrawable().getColor());
 		drawerToggle.setDrawerArrowDrawable(hamburger);
@@ -854,7 +807,7 @@ public class DroidShows extends ListActivity
 					child.setVisibility(View.GONE);
 			}
 		}
-		m_AlertDlg = new AlertDialog.Builder(this)
+		m_AlertDlg = new MaterialAlertDialogBuilder(this)
 			.setView(filterV)
 			.setTitle(R.string.menu_filter)
 			.setIcon(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP ? R.drawable.icon : 0)
@@ -911,6 +864,8 @@ public class DroidShows extends ListActivity
 			e.printStackTrace();
 		}
 		((TextView) about.findViewById(R.id.change_language)).setText(getString(R.string.dialog_change_language) +" ("+ langCode +")");
+		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
+		((Button) about.findViewById(R.id.theme_option)).setText(getString(R.string.settings_theme) +": "+ themeName(themeMode));
 		((CheckBox) about.findViewById(R.id.auto_backup)).setChecked(autoBackup);
 		((CheckBox) about.findViewById(R.id.backup_versioning)).setChecked(backupVersioning);
 		((CheckBox) about.findViewById(R.id.latest_season)).setChecked(latestSeasonOption == UPDATE_LATEST_SEASON_ONLY);
@@ -922,7 +877,7 @@ public class DroidShows extends ListActivity
 		((CheckBox) about.findViewById(R.id.mark_from_last_watched)).setChecked(markFromLastWatched);
 		final EditText tmdbKeyV = (EditText) about.findViewById(R.id.tmdb_api_key);
 		tmdbKeyV.setText(sharedPrefs.getString(TMDB_API_KEY_NAME, ""));
-		m_AlertDlg = new AlertDialog.Builder(this)
+		m_AlertDlg = new MaterialAlertDialogBuilder(this)
 			.setView(about)
 			.setTitle(R.string.menu_about)
 			.setIcon(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP ? R.drawable.icon : 0)
@@ -933,6 +888,15 @@ public class DroidShows extends ListActivity
 				}
 			})
 			.show();
+	}
+
+	private String themeName(int mode) {
+		switch (mode) {
+			case THEME_LIGHT: return getString(R.string.theme_light);
+			case THEME_DARK: return getString(R.string.theme_dark);
+			case THEME_AMOLED: return getString(R.string.theme_amoled);
+			default: return getString(R.string.theme_automatic);
+		}
 	}
 
 	public void dialogOptions(View v) {
@@ -977,8 +941,20 @@ public class DroidShows extends ListActivity
 				markFromLastWatched ^= true;
 				updateShowStats();
 				break;
+			case R.id.theme_option:
+				int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
+				new MaterialAlertDialogBuilder(this)
+					.setTitle(R.string.settings_theme)
+					.setSingleChoiceItems(new String[]{ getString(R.string.theme_automatic), getString(R.string.theme_light), getString(R.string.theme_dark), getString(R.string.theme_amoled)}, themeMode, new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int which) {
+							sharedPrefs.edit().putInt(THEME_PREF_NAME, which).apply();
+							dialog.dismiss();
+							recreate();
+						}
+					}).show();
+				break;
 			case R.id.change_language:
-				AlertDialog.Builder changeLang = new AlertDialog.Builder(this);
+				AlertDialog.Builder changeLang = new MaterialAlertDialogBuilder(this);
 				changeLang.setTitle(R.string.dialog_change_language)
 					.setItems(R.array.languages, new DialogInterface.OnClickListener() {
 						public void onClick(DialogInterface dialog, int item) {
@@ -1036,7 +1012,7 @@ public class DroidShows extends ListActivity
 		}
 		if (!auto && toastTxt == R.string.dialog_backup_done && !backupFolder.equals(DroidShows.backupFolder)) {
 			final CharSequence[] backupFolders = {backupFolder, DroidShows.backupFolder};
-			new AlertDialog.Builder(DroidShows.this)
+			new MaterialAlertDialogBuilder(DroidShows.this)
 				.setTitle(toastTxt)
 				.setSingleChoiceItems(backupFolders, 1, new DialogInterface.OnClickListener() {
 					public void onClick(DialogInterface dialog, int which) {
@@ -1126,7 +1102,7 @@ public class DroidShows extends ListActivity
 	}
 
 	private void confirmSafRestore(final Uri uri) {
-		AlertDialog.Builder adb = new AlertDialog.Builder(this);
+		AlertDialog.Builder adb = new MaterialAlertDialogBuilder(this);
 		adb.setTitle(R.string.dialog_restore);
 		adb.setMessage(R.string.dialog_restore_now);
 		adb.setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
@@ -1352,7 +1328,7 @@ public class DroidShows extends ListActivity
 						Looper.loop();
 					}
 				};
-				AlertDialog.Builder alertDialog = new AlertDialog.Builder(this)
+				AlertDialog.Builder alertDialog = new MaterialAlertDialogBuilder(this)
 					.setTitle(serie.getMediaType() == 1 ? R.string.dialog_title_delete_movie : R.string.dialog_title_delete)
 					.setMessage(String.format(getString(R.string.dialog_delete), serie.getName()))
 					.setIcon(android.R.drawable.ic_dialog_alert)
@@ -1384,7 +1360,6 @@ public class DroidShows extends ListActivity
 			openContextMenu(v);
 	}
 
-	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id) {
 		keyboard.hideSoftInputFromWindow(searchV.getWindowToken(), 0);
 		if (swipeDetect.value == 1 && canMarkNextEpSeen(seriesAdapter.getItem(position))) {
@@ -1596,14 +1571,14 @@ public class DroidShows extends ListActivity
 		final EditText input = new EditText(this);
 		final String extResourcesInput = extResourcesString;
 		input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_VARIATION_URI);
-		new AlertDialog.Builder(this)
+		new MaterialAlertDialogBuilder(this)
 			.setTitle(serie.getName())
 			.setItems(extResources, new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int item) {
 					String clicked = extResources[item];
 					if (item == extResources.length-1) {
 						input.setText(extResourcesInput);
-						new AlertDialog.Builder(DroidShows.this)
+						new MaterialAlertDialogBuilder(DroidShows.this)
 							.setTitle(serie.getName())
 							.setView(input)
 							.setPositiveButton(R.string.dialog_ok, new DialogInterface.OnClickListener() {
@@ -1676,7 +1651,7 @@ public class DroidShows extends ListActivity
 					if (isMovie) {
 						if (apiKey == null || apiKey.isEmpty()) {
 							errorNotify(serieName);
-							m_ProgressDialog.dismiss();
+							dismissUpdateProgress();
 							return;
 						}
 						sToUpdate = new TMDB(apiKey).getMovie(serieId);
@@ -1685,14 +1660,14 @@ public class DroidShows extends ListActivity
 						tvmazeId = resolveTvmazeId(tvMaze, serieId);
 						if (tvmazeId == null || tvmazeId.isEmpty()) {
 							errorNotify(serieName);
-							m_ProgressDialog.dismiss();
+							dismissUpdateProgress();
 							return;
 						}
 						sToUpdate = getTVMazeShow(tvMaze, tvmazeId);
 					}
 					if (sToUpdate == null) {
 						errorNotify(serieName);
-						m_ProgressDialog.dismiss();
+						dismissUpdateProgress();
 					} else {
 						if (!isMovie) {	// keep the existing DB row; TVMaze id goes to tvmazeId
 							sToUpdate.setId(serieId);
@@ -1705,7 +1680,7 @@ public class DroidShows extends ListActivity
 						if (!db.updateSerie(sToUpdate, lastSeasonOnly))
 							toastMsg = isMovie ? getString(R.string.messages_error_dbupdate_movie) : "Database error while updating show";
 						updatePosterThumb(serieId, sToUpdate);
-						m_ProgressDialog.dismiss();
+						dismissUpdateProgress();
 						Looper.prepare();
 							Toast.makeText(getApplicationContext(),
 								sToUpdate.getSerieName() +" "+ toastMsg,
@@ -1715,7 +1690,15 @@ public class DroidShows extends ListActivity
 					}
 				}
 			};
-			m_ProgressDialog = ProgressDialog.show(DroidShows.this, serie.getName(), getString(isMovie ? R.string.messages_update_movie : R.string.messages_update_serie), true, false);
+			View updView = View.inflate(DroidShows.this, R.layout.progress_dialog, null);
+			m_ProgressMsg = (TextView) updView.findViewById(R.id.progress_msg);
+			com.google.android.material.progressindicator.LinearProgressIndicator updBar =
+				(com.google.android.material.progressindicator.LinearProgressIndicator) updView.findViewById(R.id.progress_bar);
+			updBar.setIndeterminate(true);
+			m_ProgressMsg.setText(getString(isMovie ? R.string.messages_update_movie : R.string.messages_update_serie));
+			m_ProgressDialog = new MaterialAlertDialogBuilder(DroidShows.this)
+				.setTitle(serie.getName()).setView(updView).setCancelable(false).create();
+			m_ProgressDialog.show();
 			updateShowTh = new Thread(updateserierun);
 			updateShowTh.start();
 		}
@@ -1787,9 +1770,18 @@ public class DroidShows extends ListActivity
 
 	private Runnable changeMessage = new Runnable() {
 		public void run() {
-			m_ProgressDialog.setMessage(dialogMsg);
+			if (m_ProgressMsg != null)
+				m_ProgressMsg.setText(dialogMsg);
 		}
 	};
+
+	private void dismissUpdateProgress() {
+		final androidx.appcompat.app.AlertDialog dlg = m_ProgressDialog;
+		m_ProgressDialog = null;
+		m_ProgressMsg = null;
+		if (dlg != null)
+			runOnUiThread(new Runnable() { public void run() { dlg.dismiss(); } });
+	}
 
 	public void clearFilter(View v) {
 		main.setVisibility(View.INVISIBLE);
@@ -1811,7 +1803,7 @@ public class DroidShows extends ListActivity
 		boolean isMovie = mediaType == 1;
 		String updateMessageAD = getString(isMovie ? R.string.dialog_update_movies : R.string.dialog_update_series)
 			+ (!isMovie && latestSeasonOption == UPDATE_ALL_SEASONS ? getString(R.string.dialog_update_speedup) : "");
-		AlertDialog.Builder alertDialog = new AlertDialog.Builder(this)
+		AlertDialog.Builder alertDialog = new MaterialAlertDialogBuilder(this)
 			.setTitle(isMovie ? R.string.messages_title_updating_movies : R.string.messages_title_update_series)
 			.setMessage(updateMessageAD)
 			.setIcon(android.R.drawable.ic_dialog_alert)
@@ -1853,9 +1845,8 @@ public class DroidShows extends ListActivity
 			final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
 			final Runnable updateMessage = new Runnable() {
 				public void run() {
-					if (!swipeTriggered) {
-						updateAllSeriesPD.setMessage(dialogMsg);
-						updateAllSeriesPD.show();
+					if (!swipeTriggered && updateAllSeriesMsg != null) {
+						updateAllSeriesMsg.setText(dialogMsg);
 					}
 				}
 			};
@@ -1871,7 +1862,12 @@ public class DroidShows extends ListActivity
 							+" for "+ (isMovie ? "movie " : "TV show ") + item.getName() +" ["+ (i+1) +"/"+ (seriesToUpdate.size()) +"]");
 						dialogMsg = item.getName() + "\u2026";
 						if (!swipeTriggered) {
-							updateAllSeriesPD.incrementProgressBy(1);
+							runOnUiThread(new Runnable() {
+								public void run() {
+									if (updateAllSeriesBar != null)
+										updateAllSeriesBar.setProgress(updateAllSeriesBar.getProgress() + 1);
+								}
+							});
 							runOnUiThread(updateMessage);
 						}
 						Serie sToUpdate = null;
@@ -1923,20 +1919,27 @@ public class DroidShows extends ListActivity
 							}
 						});
 					} else {
-						updateAllSeriesPD.dismiss();
+						runOnUiThread(new Runnable() {
+							public void run() {
+								if (updateAllSeriesDlg != null)
+									updateAllSeriesDlg.dismiss();
+							}
+						});
 					}
 					updatingAll = false;
 				}
 			};
 			if (!swipeTriggered) {
-				updateAllSeriesPD = new ProgressDialog(this);
-				updateAllSeriesPD.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-				updateAllSeriesPD.setTitle(mediaType == 1 ? R.string.messages_title_updating_movies : R.string.messages_title_updating_series);
-				updateAllSeriesPD.setMessage(getString(mediaType == 1 ? R.string.messages_update_movies : R.string.messages_update_series));
-				updateAllSeriesPD.setCancelable(false);
-				updateAllSeriesPD.setMax(seriesToUpdate.size());
-				updateAllSeriesPD.setProgress(0);
-				updateAllSeriesPD.show();
+				View updateAllView = View.inflate(this, R.layout.progress_dialog, null);
+				updateAllSeriesMsg = (TextView) updateAllView.findViewById(R.id.progress_msg);
+				updateAllSeriesBar = (LinearProgressIndicator) updateAllView.findViewById(R.id.progress_bar);
+				updateAllSeriesMsg.setText(getString(mediaType == 1 ? R.string.messages_update_movies : R.string.messages_update_series));
+				updateAllSeriesBar.setMax(seriesToUpdate.size());
+				updateAllSeriesBar.setProgress(0);
+				updateAllSeriesDlg = new MaterialAlertDialogBuilder(this)
+					.setTitle(mediaType == 1 ? R.string.messages_title_updating_movies : R.string.messages_title_updating_series)
+					.setView(updateAllView).setCancelable(false).create();
+				updateAllSeriesDlg.show();
 			}
 			updatingAll = true;
 			updateAllShowsTh = new Thread(updateallseries);
@@ -2019,8 +2022,8 @@ public class DroidShows extends ListActivity
 		TextView emptyText = (TextView) findViewById(R.id.empty_text);
 		if (emptyText != null)
 			emptyText.setText(isMovie ? R.string.layout_main_no_movies : R.string.layout_main_no_items);
-		if (drawerList != null)
-			drawerList.setItemChecked(mediaType, true);
+		if (navView != null)
+			navView.setCheckedItem(mediaType == 1 ? R.id.nav_movies : R.id.nav_tv);
 		main.setVisibility(View.VISIBLE);
 		asyncInfo = new AsyncInfo();
 		asyncInfo.execute();
@@ -2205,8 +2208,8 @@ public class DroidShows extends ListActivity
 
 	@Override
 	public void onBackPressed() {
-		if (drawerLayout != null && drawerLayout.isDrawerOpen(drawerList)) {
-			drawerLayout.closeDrawer(drawerList);
+		if (drawerLayout != null && navView != null && drawerLayout.isDrawerOpen(navView)) {
+			drawerLayout.closeDrawer(navView);
 			return;
 		}
 		if (searching())
@@ -2218,8 +2221,8 @@ public class DroidShows extends ListActivity
 				toggleArchive();
 			else
 				super.onBackPressed();
-			if (spinner != null)
-				spinner.setSelection(showArchive);
+			TabLayout modeTabs = (TabLayout) findViewById(R.id.mode_tabs);
+			if (modeTabs != null) { TabLayout.Tab t = modeTabs.getTabAt(showArchive); if (t != null) t.select(); }
 		}
 	}
 

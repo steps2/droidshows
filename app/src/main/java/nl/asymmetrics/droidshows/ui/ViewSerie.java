@@ -10,6 +10,7 @@ import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import android.app.Activity;
 import android.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
@@ -251,7 +252,7 @@ public class ViewSerie extends Activity
 	
 	public void IMDbNames(View v) {
 		if (swipeDetect.value != 0) return;
-		new AlertDialog.Builder(this)
+		new MaterialAlertDialogBuilder(this)
 			.setTitle(R.string.menu_search)
 			.setItems(actors.toArray(new CharSequence[actors.size()]), new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int item) {

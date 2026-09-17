@@ -19,8 +19,8 @@ import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import nl.asymmetrics.droidshows.utils.Utils;
 import android.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.app.ListActivity;
-import android.app.ProgressDialog;
 import android.app.SearchManager;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -56,7 +56,27 @@ public class AddSerie extends ListActivity
 	private TVMaze tvMaze;
 	private SeriesSearchAdapter seriessearch_adapter;
 	/* DIALOGS */
-	private ProgressDialog m_ProgressDialog = null;
+	private androidx.appcompat.app.AlertDialog m_ProgressDialog = null;
+
+	private void showProgress(int titleRes, int msgRes, boolean cancelable) {
+		dismissProgress();
+		View v = View.inflate(this, R.layout.progress_dialog, null);
+		((TextView) v.findViewById(R.id.progress_msg)).setText(msgRes);
+		com.google.android.material.progressindicator.LinearProgressIndicator bar =
+			(com.google.android.material.progressindicator.LinearProgressIndicator) v.findViewById(R.id.progress_bar);
+		bar.setIndeterminate(true);
+		m_ProgressDialog = new MaterialAlertDialogBuilder(this)
+			.setTitle(titleRes).setView(v).setCancelable(cancelable).create();
+		m_ProgressDialog.show();
+	}
+
+	private void dismissProgress() {
+		final androidx.appcompat.app.AlertDialog dlg = m_ProgressDialog;
+		m_ProgressDialog = null;
+		if (dlg == null) return;
+		if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) dlg.dismiss();
+		else runOnUiThread(new Runnable() { public void run() { dlg.dismiss(); } });
+	}
 	/* Option Menus */
 	private static final int ADD_SERIE_MENU_ITEM = Menu.FIRST;
 	/* Context Menus */
@@ -125,7 +145,7 @@ public class AddSerie extends ListActivity
 					seriessearch_adapter.add(search_series.get(i));
 			}
 			seriessearch_adapter.notifyDataSetChanged();
-			m_ProgressDialog.dismiss();
+			dismissProgress();
 		}
 	};
 
@@ -134,7 +154,7 @@ public class AddSerie extends ListActivity
 			search_series = new ArrayList<Serie>();
 			search_series = searchWithRetry(searchQuery);
 			if (search_series == null) {
-				m_ProgressDialog.dismiss();
+				dismissProgress();
 				Looper.prepare();
 					Toast.makeText(getApplicationContext(), R.string.messages_thetvdb_con_error, Toast.LENGTH_LONG).show();
 				Looper.loop();
@@ -163,7 +183,7 @@ public class AddSerie extends ListActivity
 	}
 
 	private void Search() {
-		m_ProgressDialog = ProgressDialog.show(AddSerie.this, getString(R.string.messages_title_search_series), getString(R.string.messages_search_series), true, true);
+		showProgress(R.string.messages_title_search_series, R.string.messages_search_series, true);
 		new Thread(new Runnable() {
 			public void run() {
 				tvMaze = new TVMaze();
@@ -174,7 +194,7 @@ public class AddSerie extends ListActivity
 
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
-		m_ProgressDialog.dismiss();
+		dismissProgress();
 		super.onSaveInstanceState(outState);
 	}
 	
@@ -194,7 +214,7 @@ public class AddSerie extends ListActivity
 		@Override
 		protected void onPreExecute() {
 			super.onPreExecute();
-			m_ProgressDialog = ProgressDialog.show(AddSerie.this, getString(R.string.messages_title_adding_serie), getString(R.string.messages_adding_serie), true, false);
+			showProgress(R.string.messages_title_adding_serie, R.string.messages_adding_serie, false);
 		}
 
 		protected Boolean doInBackground(Serie... params) {
@@ -301,7 +321,7 @@ public class AddSerie extends ListActivity
 			super.onPostExecute(result);
 			seriessearch_adapter.notifyDataSetChanged();
 			if (msg != null) Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();
-			m_ProgressDialog.dismiss();
+			dismissProgress();
 		}
 
 		@Override
@@ -370,7 +390,7 @@ public class AddSerie extends ListActivity
 	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id) {
 		final Serie sToAdd = AddSerie.search_series.get(position);
-		AlertDialog sOverview = new AlertDialog.Builder(this)
+		AlertDialog sOverview = new MaterialAlertDialogBuilder(this)
 		.setIcon(R.drawable.icon)
 		.setTitle(sToAdd.getSerieName())
 		.setMessage(sToAdd.getOverview())

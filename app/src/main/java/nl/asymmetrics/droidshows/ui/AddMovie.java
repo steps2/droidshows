@@ -18,8 +18,8 @@ import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import nl.asymmetrics.droidshows.utils.Utils;
 import android.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.app.ListActivity;
-import android.app.ProgressDialog;
 import android.app.SearchManager;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -55,7 +55,27 @@ public class AddMovie extends ListActivity
 	private TMDB tmdb;
 	private MovieSearchAdapter moviesearch_adapter;
 	/* DIALOGS */
-	private ProgressDialog m_ProgressDialog = null;
+	private androidx.appcompat.app.AlertDialog m_ProgressDialog = null;
+
+	private void showProgress(int titleRes, int msgRes, boolean cancelable) {
+		dismissProgress();
+		View v = View.inflate(this, R.layout.progress_dialog, null);
+		((TextView) v.findViewById(R.id.progress_msg)).setText(msgRes);
+		com.google.android.material.progressindicator.LinearProgressIndicator bar =
+			(com.google.android.material.progressindicator.LinearProgressIndicator) v.findViewById(R.id.progress_bar);
+		bar.setIndeterminate(true);
+		m_ProgressDialog = new MaterialAlertDialogBuilder(this)
+			.setTitle(titleRes).setView(v).setCancelable(cancelable).create();
+		m_ProgressDialog.show();
+	}
+
+	private void dismissProgress() {
+		final androidx.appcompat.app.AlertDialog dlg = m_ProgressDialog;
+		m_ProgressDialog = null;
+		if (dlg == null) return;
+		if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) dlg.dismiss();
+		else runOnUiThread(new Runnable() { public void run() { dlg.dismiss(); } });
+	}
 	/* Option Menus */
 	private static final int ADD_MOVIE_MENU_ITEM = Menu.FIRST;
 	/* Context Menus */
@@ -132,7 +152,7 @@ public class AddMovie extends ListActivity
 					moviesearch_adapter.add(search_movies.get(i));
 			}
 			moviesearch_adapter.notifyDataSetChanged();
-			m_ProgressDialog.dismiss();
+			dismissProgress();
 		}
 	};
 
@@ -141,7 +161,7 @@ public class AddMovie extends ListActivity
 			search_movies = new ArrayList<Serie>();
 			search_movies = tmdb.searchMovies(searchQuery);
 			if (search_movies == null) {
-				m_ProgressDialog.dismiss();
+				dismissProgress();
 				Looper.prepare();
 					Toast.makeText(getApplicationContext(), R.string.messages_tmdb_con_error, Toast.LENGTH_LONG).show();
 				Looper.loop();
@@ -154,7 +174,7 @@ public class AddMovie extends ListActivity
 	}
 
 	private void Search() {
-		m_ProgressDialog = ProgressDialog.show(AddMovie.this, getString(R.string.messages_title_search_movies), getString(R.string.messages_search_movies), true, true);
+		showProgress(R.string.messages_title_search_movies, R.string.messages_search_movies, true);
 		new Thread(new Runnable() {
 			public void run() {
 				tmdb = new TMDB(apiKey);
@@ -165,7 +185,7 @@ public class AddMovie extends ListActivity
 
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
-		if (m_ProgressDialog != null) m_ProgressDialog.dismiss();
+		if (m_ProgressDialog != null) dismissProgress();
 		super.onSaveInstanceState(outState);
 	}
 
@@ -185,7 +205,7 @@ public class AddMovie extends ListActivity
 		@Override
 		protected void onPreExecute() {
 			super.onPreExecute();
-			m_ProgressDialog = ProgressDialog.show(AddMovie.this, getString(R.string.messages_title_adding_movie), getString(R.string.messages_adding_movie), true, false);
+			showProgress(R.string.messages_title_adding_movie, R.string.messages_adding_movie, false);
 		}
 
 		protected Boolean doInBackground(Serie... params) {
@@ -291,7 +311,7 @@ public class AddMovie extends ListActivity
 			super.onPostExecute(result);
 			moviesearch_adapter.notifyDataSetChanged();
 			if (msg != null) Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();
-			m_ProgressDialog.dismiss();
+			dismissProgress();
 		}
 
 		@Override
@@ -337,7 +357,7 @@ public class AddMovie extends ListActivity
 	@Override
 	protected void onListItemClick(ListView l, View v, int position, long id) {
 		final Serie mToAdd = AddMovie.search_movies.get(position);
-		AlertDialog sOverview = new AlertDialog.Builder(this)
+		AlertDialog sOverview = new MaterialAlertDialogBuilder(this)
 		.setIcon(R.drawable.icon)
 		.setTitle(mToAdd.getSerieName())
 		.setMessage(mToAdd.getOverview())

@@ -3,10 +3,10 @@ apply plugin: 'com.android.application'
 android {
     defaultConfig {
         applicationId "nl.asymmetrics.droidshows"
-        minSdkVersion 14
-        // minSdkVersion 21 // required androidx appcompat 1.7
+        minSdkVersion 21 // required androidx appcompat 1.7 / material 1.13
+        // minSdkVersion 14 // previous: migrated android 4.0 api 14 version
         targetSdkVersion 34
-        compileSdkVersion 34
+        compileSdkVersion 35
 
         // versionCode 71110     // original andoid 2.3 api 9 version
         // versionName "7.11.10" // original andoid 2.3 api 9 version
@@ -70,11 +70,12 @@ dependencies {
 
     // def appcompat_version = "1.7.0" // most recent requires api 21
     // def appcompat_version = "1.0.0"
-    def appcompat_version = "1.0.2" // latest 1.0.x requires api 14
+    def appcompat_version = "1.7.0" // requires api 21
 
     implementation "androidx.appcompat:appcompat:$appcompat_version"
-    implementation "androidx.drawerlayout:drawerlayout:1.0.0"
+    implementation "androidx.drawerlayout:drawerlayout:1.2.0"
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
+    implementation 'com.google.android.material:material:1.13.0'
 
     // implementation "androidx.recyclerview:recyclerview:1.4.0"
     // implementation "androidx.recyclerview:recyclerview:1.0.0" // not used yet

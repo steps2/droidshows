@@ -13,6 +13,7 @@ import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import android.app.Activity;
 import android.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.DialogInterface;
@@ -264,7 +265,7 @@ public class ViewEpisode extends Activity
 		else
 			return;
 
-		new AlertDialog.Builder(this)
+		new MaterialAlertDialogBuilder(this)
 			.setTitle(R.string.menu_search)
 			.setItems(names.toArray(new CharSequence[names.size()]), new DialogInterface.OnClickListener() {
 				public void onClick(DialogInterface dialog, int item) {

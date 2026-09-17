@@ -43,6 +43,11 @@
 <string name="dialog_backup_failed">Datensicherung fehlgeschlagen!</string>
 <string name="dialog_backup_usefolder">Für tägliche Sicherung verwenden</string>
 <string name="dialog_change_language">Sprache der Seriendetails</string>
+<string name="settings_theme">Theme</string>
+<string name="theme_automatic">Automatisch</string>
+<string name="theme_light">Hell</string>
+<string name="theme_dark">Dunkel</string>
+<string name="theme_amoled">AMOLED-Schwarz</string>
 <string name="dialog_use_mirror">TheTVDB Spiegel verwenden (falls Updates zu lange dauern)</string>
 <string name="dialog_restore">Einlesen</string>
 <string name="dialog_restore_now">Während der Datenwiederherstellung werden alle Daten in TVMovie Tracker überschrieben. Fortfahren?</string>

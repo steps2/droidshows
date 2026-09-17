@@ -43,6 +43,11 @@
 <string name="dialog_backup_failed">Kon back-up niet voltooien!</string>
 <string name="dialog_backup_usefolder">Voor dagelijkse back-ups gebruiken</string>
 <string name="dialog_change_language">Taal synopsis</string>
+<string name="settings_theme">Thema</string>
+<string name="theme_automatic">Automatisch</string>
+<string name="theme_light">Licht</string>
+<string name="theme_dark">Donker</string>
+<string name="theme_amoled">AMOLED-zwart</string>
 <string name="dialog_use_mirror">Gebruik TheTVDB mirror (probeer dit als updates te langzaam gaan)</string>
 <string name="dialog_restore">Herstellen</string>
 <string name="dialog_restore_now">Het herstellen van een database zal de huidige informatie in TVMovie Tracker verwijderen. Doorgaan?</string>
