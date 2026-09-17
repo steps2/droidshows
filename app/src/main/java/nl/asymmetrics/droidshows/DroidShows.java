@@ -54,6 +54,7 @@ import nl.asymmetrics.droidshows.utils.SQLiteStore.NextEpisode;
 import android.annotation.SuppressLint;
 import androidx.appcompat.app.AlertDialog;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.SearchManager;
@@ -1994,36 +1995,34 @@ public class DroidShows extends AppCompatActivity
 		}
 	}
 
-	@SuppressLint("NewApi")
-	@SuppressWarnings("deprecation")
-	private void errorNotify(String error) {
-		NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-		PendingIntent appIntent = PendingIntent.getActivity(DroidShows.this, 0, new Intent(), PendingIntent.FLAG_IMMUTABLE);
+	private static final String NOTIFY_CHANNEL_ID = "tvmovie_tracker_errors";
 
-		Notification notification = null;
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
-			notification = new Notification(R.drawable.noposter,
-					getString(R.string.messages_thetvdb_con_error), System.currentTimeMillis());
-			try {
-				Method deprecatedMethod = notification.getClass().getMethod("setLatestEventInfo", Context.class, CharSequence.class, CharSequence.class, PendingIntent.class);
-				deprecatedMethod.invoke(notification, getApplicationContext(), getString(R.string.messages_thetvdb_con_error), error, appIntent);
-			} catch (Exception e) {
-				Log.e(SQLiteStore.TAG, "Method setLatestEventInfo not found", e);
+	private void ensureNotifyChannel() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+			if (nm.getNotificationChannel(NOTIFY_CHANNEL_ID) == null) {
+				NotificationChannel channel = new NotificationChannel(
+					NOTIFY_CHANNEL_ID, getString(R.string.layout_app_name),
+					NotificationManager.IMPORTANCE_DEFAULT);
+				nm.createNotificationChannel(channel);
 			}
-		} else {
-			Notification.Builder builder = new Notification.Builder(getApplicationContext())
+		}
+	}
+
+	@SuppressLint("NewApi")
+	private void errorNotify(String error) {
+		ensureNotifyChannel();
+		PendingIntent appIntent = PendingIntent.getActivity(DroidShows.this, 0, new Intent(), PendingIntent.FLAG_IMMUTABLE);
+		// NotificationCompat renders with the platform's normal notification
+		// styling instead of the app theme, so no purple accent anywhere.
+		androidx.core.app.NotificationCompat.Builder builder =
+			new androidx.core.app.NotificationCompat.Builder(getApplicationContext(), NOTIFY_CHANNEL_ID)
 				.setContentIntent(appIntent)
 				.setSmallIcon(R.drawable.noposter)
 				.setContentTitle(getString(R.string.messages_thetvdb_con_error))
-				.setContentText(error);
-			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN)
-			    notification = builder.getNotification();
-			else
-			    notification = builder.build();
-		}
-
-		notification.flags |= Notification.FLAG_AUTO_CANCEL;
-		mNotificationManager.notify(0, notification);
+				.setContentText(error)
+				.setAutoCancel(true);
+		androidx.core.app.NotificationManagerCompat.from(this).notify(0, builder.build());
 	}
 
 	private void getSeries() {

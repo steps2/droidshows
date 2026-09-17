@@ -89,11 +89,27 @@ public class AddMovie extends AppCompatActivity
 	private String apiKey = "";
 	private AsyncAddMovie addMovieTask = null;
 	private Serie mToAdd;
+	private androidx.appcompat.widget.SearchView searchView;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.add_movie);
+		searchView = (androidx.appcompat.widget.SearchView) findViewById(R.id.add_movie_searchview);
+		searchView.setIconifiedByDefault(false);
+		searchView.setOnQueryTextListener(new androidx.appcompat.widget.SearchView.OnQueryTextListener() {
+			public boolean onQueryTextSubmit(String query) {
+				searchQuery = query;
+				TextView title = (TextView) findViewById(R.id.add_movie_title);
+				title.setText(getString(R.string.dialog_search) + " " + searchQuery);
+				searchView.clearFocus();
+				doSearch();
+				return true;
+			}
+			public boolean onQueryTextChange(String newText) {
+				return false;
+			}
+		});
 		listView = (ListView) findViewById(android.R.id.list);
 		View emptyView = findViewById(android.R.id.empty);
 		if (emptyView != null) listView.setEmptyView(emptyView);
@@ -129,7 +145,7 @@ public class AddMovie extends AppCompatActivity
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case ADD_MOVIE_MENU_ITEM :
-				onSearchRequested();
+				searchView.requestFocus();
 				break;
 		}
 		return super.onOptionsItemSelected(item);
@@ -178,7 +194,13 @@ public class AddMovie extends AppCompatActivity
 				runOnUiThread(loadSearchMovies);
 			}
 		} catch (Exception e) {
-			Log.e(SQLiteStore.TAG, e.getMessage());
+			Log.e(SQLiteStore.TAG, "searchMovies failed", e);
+			runOnUiThread(new Runnable() {
+				public void run() {
+					dismissProgress();
+					Toast.makeText(getApplicationContext(), R.string.messages_tmdb_con_error, Toast.LENGTH_LONG).show();
+				}
+			});
 		}
 	}
 
@@ -340,9 +362,10 @@ public class AddMovie extends AppCompatActivity
 		if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
 			searchQuery = intent.getStringExtra(SearchManager.QUERY);
 			if (searchQuery == null || searchQuery.length() == 0) {
-				onSearchRequested();
+				searchView.requestFocus();
 				return;
 			}
+			searchView.setQuery(searchQuery, false);
 			TextView title = (TextView) findViewById(R.id.add_movie_title);
 			title.setText(getString(R.string.dialog_search) + " " + searchQuery);
 			doSearch();
