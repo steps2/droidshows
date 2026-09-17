@@ -17,7 +17,7 @@ import nl.asymmetrics.droidshows.thetvdb.model.TVShowItem;
 import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import nl.asymmetrics.droidshows.utils.Utils;
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.app.ListActivity;
 import android.app.SearchManager;

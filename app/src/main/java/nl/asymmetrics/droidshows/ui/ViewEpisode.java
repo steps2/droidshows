@@ -12,7 +12,7 @@ import nl.asymmetrics.droidshows.R;
 import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import android.app.Activity;
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
