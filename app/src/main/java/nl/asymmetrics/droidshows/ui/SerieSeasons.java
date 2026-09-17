@@ -9,7 +9,7 @@ import nl.asymmetrics.droidshows.thetvdb.model.Season;
 import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import android.annotation.SuppressLint;
-import android.app.ListActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -25,13 +25,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 
-public class SerieSeasons extends ListActivity
+public class SerieSeasons extends AppCompatActivity
 {
 	private String serieId;
 	private List<Integer> seasonNumbers = new ArrayList<Integer>();
@@ -50,13 +51,20 @@ public class SerieSeasons extends ListActivity
 		this.overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.serie_seasons);
+		listView = (ListView) findViewById(android.R.id.list);
+		View emptyView = findViewById(android.R.id.empty);
+		if (emptyView != null) listView.setEmptyView(emptyView);
+		listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
+				SerieSeasons.this.onListItemClick(v, position, id);
+			}
+		});
 		db = SQLiteStore.getInstance(this);
 		serieId = getIntent().getStringExtra("serieId");
 		setTitle(db.getSerieName(serieId));
 		getSeasons();
 		seasonsAdapter = new SeriesSeasonsAdapter(this, R.layout.row_serie_seasons, seasons);
-		setListAdapter(seasonsAdapter);
-		listView = getListView();
+		listView.setAdapter(seasonsAdapter);
 		listView.getViewTreeObserver().addOnGlobalLayoutListener(listDone);
 		registerForContextMenu(listView);
 		listView.setOnTouchListener(swipeDetect);
@@ -104,8 +112,7 @@ public class SerieSeasons extends ListActivity
 			openContextMenu(v);
 	}
 
-	@Override
-	protected void onListItemClick(ListView l, View v, int position, long id) {
+	private void onListItemClick(View v, int position, long id) {
 		if (swipeDetect.value != 0) return;
 		Intent serieEpisode = new Intent(SerieSeasons.this, SerieEpisodes.class);
 		serieEpisode.putExtra("serieId", serieId);

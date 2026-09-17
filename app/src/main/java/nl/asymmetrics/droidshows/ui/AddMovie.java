@@ -19,7 +19,7 @@ import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import nl.asymmetrics.droidshows.utils.Utils;
 import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import android.app.ListActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.app.SearchManager;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -40,6 +40,7 @@ import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
 import androidx.appcompat.content.res.AppCompatResources;
 import android.view.View.OnClickListener;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckedTextView;
 import android.widget.ListView;
@@ -49,7 +50,7 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 
 import org.apache.commons.io.FileUtils;
 
-public class AddMovie extends ListActivity
+public class AddMovie extends AppCompatActivity
 {
 	private static List<Serie> search_movies = null;
 	private TMDB tmdb;
@@ -93,11 +94,19 @@ public class AddMovie extends ListActivity
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.add_movie);
+		listView = (ListView) findViewById(android.R.id.list);
+		View emptyView = findViewById(android.R.id.empty);
+		if (emptyView != null) listView.setEmptyView(emptyView);
+		listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
+				AddMovie.this.onListItemClick(v, position, id);
+			}
+		});
 		db = SQLiteStore.getInstance(this);
 		movies = db.getSeries(2, false, null, 1);	// 2 = archive and current, false = don't filter networks, null = ignore networks filter, 1 = movies only
 		List<Serie> search_movies = new ArrayList<Serie>();
 		this.moviesearch_adapter = new MovieSearchAdapter(this, R.layout.row_search_movies, search_movies);
-		setListAdapter(moviesearch_adapter);
+		listView.setAdapter(moviesearch_adapter);
 		((TextView) findViewById(android.R.id.empty)).setText(R.string.layout_search_no_movies);
 		apiKey = getSharedPreferences("DroidShowsPref", 0).getString(DroidShows.TMDB_API_KEY_NAME, "");
 		if (apiKey == null || apiKey.length() == 0) {
@@ -134,7 +143,7 @@ public class AddMovie extends ListActivity
 
 	public boolean onContextItemSelected(MenuItem item) {
 		final AdapterContextMenuInfo info = (AdapterContextMenuInfo) item.getMenuInfo();
-		final ListView movieList = getListView();
+		final ListView movieList = listView;
 		switch (item.getItemId()) {
 			case ADD_CONTEXT :
 				final Serie tmpMovie = (Serie) movieList.getAdapter().getItem(info.position);
@@ -338,9 +347,8 @@ public class AddMovie extends ListActivity
 			title.setText(getString(R.string.dialog_search) + " " + searchQuery);
 			doSearch();
 		}
-		listView = getListView();
 		listView.setOnTouchListener(new SwipeDetect());
-		registerForContextMenu(getListView());
+		registerForContextMenu(listView);
 	}
 
 	private void doSearch() {
@@ -354,8 +362,7 @@ public class AddMovie extends ListActivity
 			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
 	}
 
-	@Override
-	protected void onListItemClick(ListView l, View v, int position, long id) {
+	private void onListItemClick(View v, int position, long id) {
 		final Serie mToAdd = AddMovie.search_movies.get(position);
 		AlertDialog sOverview = new MaterialAlertDialogBuilder(this)
 		.setIcon(R.drawable.icon)

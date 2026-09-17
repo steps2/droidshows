@@ -112,7 +112,6 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
@@ -182,10 +181,7 @@ public class DroidShows extends AppCompatActivity
 	private static AlertDialog updateAllSeriesDlg = null;
 	private static TextView updateAllSeriesMsg = null;
 	private static LinearProgressIndicator updateAllSeriesBar = null;
-	// Pull-to-refresh: swipe-triggered runs show the SwipeRefreshLayout spinner
-	// instead of the modal progress dialog.
-	private SwipeRefreshLayout swipeRefresh = null;
-	private boolean swipeTriggered = false;
+	private boolean swipeTriggered = false;	// kept for the update dialog logic; the pull gesture is removed
 	private volatile boolean updatingAll = false;
 	public static SeriesAdapter seriesAdapter;
 	private static BounceListView listView = null;
@@ -356,19 +352,6 @@ public class DroidShows extends AppCompatActivity
 		});
 		listView.setDivider(null);
 		listView.setOverscrollHeader(getResources().getDrawable(R.drawable.shape_gradient_ring));
-		swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
-		swipeRefresh.setColorSchemeResources(R.color.swipe_m3_1, R.color.swipe_m3_2, R.color.swipe_m3_3);
-		swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-			@Override
-			public void onRefresh() {
-				if (updatingAll) {
-					swipeRefresh.setRefreshing(false);
-					return;
-				}
-				swipeTriggered = true;
-				updateAllSeries(showArchive);
-			}
-		});
 		if (savedInstanceState != null) {
 			getSeries((savedInstanceState.getBoolean("searching") ? 2 : showArchive));
 		} else {
@@ -1892,18 +1875,12 @@ public class DroidShows extends AppCompatActivity
 	public void updateAllSeries(final int showArchive) {
 		if (!utils.isNetworkAvailable(DroidShows.this)) {
 			Toast.makeText(getApplicationContext(), R.string.messages_no_internet, Toast.LENGTH_LONG).show();
-			if (swipeTriggered) {
+			if (swipeTriggered)
 				swipeTriggered = false;
-				if (swipeRefresh != null)
-					swipeRefresh.setRefreshing(false);
-			}
 		} else if (updatingAll) {
 			// an update is already running (swipe, bounce or menu) — don't stack another one
-			if (swipeTriggered) {
+			if (swipeTriggered)
 				swipeTriggered = false;
-				if (swipeRefresh != null)
-					swipeRefresh.setRefreshing(false);
-			}
 		} else {
 			final List<TVShowItem> seriesToUpdate = new ArrayList<TVShowItem>();
 			List<String> ids = db.getSeries(searching() ? 2 : showArchive, false, null, mediaType);
@@ -1979,12 +1956,6 @@ public class DroidShows extends AppCompatActivity
 					updateShowStats();
 					if (swipeTriggered) {
 						swipeTriggered = false;
-						runOnUiThread(new Runnable() {
-							public void run() {
-								if (swipeRefresh != null)
-									swipeRefresh.setRefreshing(false);
-							}
-						});
 					} else {
 						runOnUiThread(new Runnable() {
 							public void run() {

@@ -11,7 +11,7 @@ import nl.asymmetrics.droidshows.utils.SQLiteStore;
 import nl.asymmetrics.droidshows.utils.SQLiteStore.EpisodeRow;
 import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import android.app.DatePickerDialog;
-import android.app.ListActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -27,6 +27,7 @@ import android.view.View;
 import android.view.View.OnLongClickListener;
 import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.DatePicker;
@@ -36,7 +37,7 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.TextView;
 import android.widget.TimePicker;
 
-public class SerieEpisodes extends ListActivity {
+public class SerieEpisodes extends AppCompatActivity {
 	private EpisodesAdapter episodesAdapter;
 	private String serieName;
 	private String serieId;
@@ -60,6 +61,14 @@ public class SerieEpisodes extends ListActivity {
 		this.overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.serie_episodes);
+		listView = (ListView) findViewById(android.R.id.list);
+		View emptyView = findViewById(android.R.id.empty);
+		if (emptyView != null) listView.setEmptyView(emptyView);
+		listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
+				SerieEpisodes.this.onListItemClick(v, position, id);
+			}
+		});
 		db = SQLiteStore.getInstance(this);
 		serieId = getIntent().getStringExtra("serieId");
 		serieName = db.getSerieName(serieId);
@@ -67,10 +76,9 @@ public class SerieEpisodes extends ListActivity {
 		setTitle(serieName +" - "+ (seasonNumber == 0 ? getString(R.string.messages_specials) : getString(R.string.messages_season) +" "+ seasonNumber));
 		episodes = db.getEpisodeRows(serieId, seasonNumber);
 		episodesAdapter = new EpisodesAdapter(this, R.layout.row_serie_episodes, episodes);
-		setListAdapter(episodesAdapter);
-		listView = getListView();
+		listView.setAdapter(episodesAdapter);
 		listView.setOnTouchListener(swipeDetect);
-		registerForContextMenu(getListView());
+		registerForContextMenu(listView);
 		if (getIntent().getBooleanExtra("nextEpisode", false))
 			listView.setSelection(db.getNextEpisode(serieId, seasonNumber).episode -3);
 	}
@@ -107,8 +115,7 @@ public class SerieEpisodes extends ListActivity {
 		this.openContextMenu(v);
 	}
 
-	@Override
-	protected void onListItemClick(ListView l, View v, int position, long id) {
+	private void onListItemClick(View v, int position, long id) {
 		if (swipeDetect.value != 0) return;
 		if (DroidShows.fullLineCheckOption) {
 			try {

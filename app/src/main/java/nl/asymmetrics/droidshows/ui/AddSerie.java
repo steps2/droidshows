@@ -20,7 +20,7 @@ import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import nl.asymmetrics.droidshows.utils.Utils;
 import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import android.app.ListActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.app.SearchManager;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -41,6 +41,7 @@ import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
 import androidx.appcompat.content.res.AppCompatResources;
 import android.view.View.OnClickListener;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckedTextView;
 import android.widget.ListView;
@@ -50,7 +51,7 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 
 import org.apache.commons.io.FileUtils;
 
-public class AddSerie extends ListActivity
+public class AddSerie extends AppCompatActivity
 {
 	private static List<Serie> search_series = null;
 	private TVMaze tvMaze;
@@ -93,11 +94,19 @@ public class AddSerie extends ListActivity
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.add_serie);
+		listView = (ListView) findViewById(android.R.id.list);
+		View emptyView = findViewById(android.R.id.empty);
+		if (emptyView != null) listView.setEmptyView(emptyView);
+		listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
+				AddSerie.this.onListItemClick(v, position, id);
+			}
+		});
 		db = SQLiteStore.getInstance(this);
 		series = db.getSeries(2, false, null, 0);	// 2 = archive and current shows, false = don't filter networks, null = ignore networks filter, 0 = TV shows only
 		List<Serie> search_series = new ArrayList<Serie>();
 		this.seriessearch_adapter = new SeriesSearchAdapter(this, R.layout.row_search_series, search_series);
-		setListAdapter(seriessearch_adapter);
+		listView.setAdapter(seriessearch_adapter);
 		Intent intent = getIntent();
 		getSearchResults(intent);
 	}
@@ -127,7 +136,7 @@ public class AddSerie extends ListActivity
 
 	public boolean onContextItemSelected(MenuItem item) {
 		final AdapterContextMenuInfo info = (AdapterContextMenuInfo) item.getMenuInfo();
-		final ListView serieList = getListView();
+		final ListView serieList = listView;
 		switch (item.getItemId()) {
 			case ADD_CONTEXT :
 				final Serie tmpSerie = (Serie) serieList.getAdapter().getItem(info.position);
@@ -359,9 +368,8 @@ public class AddSerie extends ListActivity
 			title.setText(getString(R.string.dialog_search) + " " + searchQuery);
 			doSearch();
 		}
-		listView = getListView();
 		listView.setOnTouchListener(new SwipeDetect());
-		registerForContextMenu(getListView());
+		registerForContextMenu(listView);
 	}
 	
 	private void doSearch() {
@@ -387,8 +395,7 @@ public class AddSerie extends ListActivity
 		}
 	}
 	
-	@Override
-	protected void onListItemClick(ListView l, View v, int position, long id) {
+	private void onListItemClick(View v, int position, long id) {
 		final Serie sToAdd = AddSerie.search_series.get(position);
 		AlertDialog sOverview = new MaterialAlertDialogBuilder(this)
 		.setIcon(R.drawable.icon)
