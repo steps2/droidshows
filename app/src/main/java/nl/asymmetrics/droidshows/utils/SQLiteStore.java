@@ -94,7 +94,14 @@ public class SQLiteStore extends SQLiteOpenHelper
 	}
 
 	/* Insert Methods */
+	private synchronized void ensureOpen() {
+		if (db == null || !db.isOpen()) {
+			try { openDataBase(); } catch (Exception e) { Log.e(TAG, "Could not re-open database", e); }
+		}
+	}
+
 	public boolean execQuery(String query) {
+		ensureOpen();
 		try {
 			db.execSQL(query);
 		} catch (SQLiteException e) {
@@ -106,6 +113,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 
 	public Cursor Query(String query) {
 		Cursor c = null;
+		ensureOpen();
 		try {
 			c = db.rawQuery(query, null);
 		} catch (SQLiteException e) {

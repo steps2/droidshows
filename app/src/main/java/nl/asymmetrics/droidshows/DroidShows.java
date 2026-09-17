@@ -1088,23 +1088,28 @@ public class DroidShows extends AppCompatActivity
 			if (asyncInfo != null)
 				asyncInfo.cancel(true);
 			db.close();
-			FileChannel sourceCh = null, destinationCh = null;
 			try {
-				sourceCh = new FileInputStream(source).getChannel();
-				if (destination.exists()) destination.delete();
-				destination.createNewFile();
-				destinationCh = new FileOutputStream(destination).getChannel();
-				destinationCh.transferFrom(sourceCh, 0, sourceCh.size());
-				destination.setLastModified(source.lastModified());
+				FileChannel sourceCh = null, destinationCh = null;
+				try {
+					sourceCh = new FileInputStream(source).getChannel();
+					if (destination.exists()) destination.delete();
+					destination.createNewFile();
+					destinationCh = new FileOutputStream(destination).getChannel();
+					destinationCh.transferFrom(sourceCh, 0, sourceCh.size());
+					destination.setLastModified(source.lastModified());
+				} finally {
+					if (sourceCh != null) {
+						sourceCh.close();
+					}
+					if (destinationCh != null) {
+						destinationCh.close();
+					}
+				}
 			} finally {
-				if (sourceCh != null) {
-					sourceCh.close();
-				}
-				if (destinationCh != null) {
-					destinationCh.close();
-				}
+				// Never leave the database closed: a failed copy used to break
+				// every later query ("attempt to re-open an already-closed object").
+				try { db.openDataBase(); } catch (Exception e2) { Log.e(SQLiteStore.TAG, "Could not re-open database after backup", e2); }
 			}
-			db.openDataBase();
 		}
 	}
 
