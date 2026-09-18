@@ -178,7 +178,7 @@ public class DroidShows extends AppCompatActivity
 	private static final int SYNOPSIS_LANGUAGE = UPDATE_CONTEXT + 1;
 	private static final int DELETE_CONTEXT = SYNOPSIS_LANGUAGE + 1;
 	private static AlertDialog m_AlertDlg;
-	private LinearProgressIndicator topProgress = null;
+	private TopProgressBinder progressBinder = null;
 	private volatile int updateAllDone = 0;
 	private boolean swipeTriggered = false;	// kept for the update dialog logic; the pull gesture is removed
 	private volatile boolean updatingAll = false;
@@ -268,6 +268,7 @@ public class DroidShows extends AppCompatActivity
 			}
 		}
 		setContentView(R.layout.main);
+		progressBinder = new TopProgressBinder(this);
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
 		if (savedInstanceState != null) {
@@ -1821,29 +1822,19 @@ public class DroidShows extends AppCompatActivity
 		c.close();
 	}
 
-	/** Non-intrusive progress: a thin bar at the top of the list; the list and app stay usable. */
+	/** Non-intrusive progress: a thin bar at the top of the list; the list and app stay usable.
+	 *  Driven through the app-wide SyncProgress so the bar stays visible (and keeps
+	 *  moving) on the seasons/episodes/detail screens too, until the work finishes. */
 	private void showTopProgress(final boolean indeterminate, final int max) {
-		runOnUiThread(new Runnable() { public void run() {
-			if (topProgress == null) topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
-			if (topProgress == null) return;
-			topProgress.setIndeterminate(indeterminate);
-			if (!indeterminate) { topProgress.setMax(Math.max(1, max)); topProgress.setProgress(0); }
-			topProgress.setVisibility(View.VISIBLE);
-		}});
+		SyncProgress.show(indeterminate, max);
 	}
 
 	private void hideTopProgress() {
-		runOnUiThread(new Runnable() { public void run() {
-			if (topProgress == null) topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
-			if (topProgress != null) topProgress.setVisibility(View.GONE);
-		}});
+		SyncProgress.hide();
 	}
 
 	private void setTopProgress(final int progress) {
-		runOnUiThread(new Runnable() { public void run() {
-			if (topProgress == null) topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
-			if (topProgress != null) topProgress.setProgress(progress);
-		}});
+		SyncProgress.set(progress);
 	}
 
 	private void dismissUpdateProgress() {
@@ -2166,6 +2157,7 @@ public class DroidShows extends AppCompatActivity
 	@Override
 	public void onResume() {
 		super.onResume();
+		if (progressBinder != null) progressBinder.onResume();
 		if (searchV.getText().length() > 0) {
 			findViewById(R.id.search).setVisibility(View.VISIBLE);
 			listView.requestFocus();
@@ -2174,6 +2166,12 @@ public class DroidShows extends AppCompatActivity
 			asyncInfo = new AsyncInfo();
 			asyncInfo.execute();
 		}
+	}
+
+	@Override
+	protected void onPause() {
+		if (progressBinder != null) progressBinder.onPause();
+		super.onPause();
 	}
 
 	private static class AsyncInfo extends AsyncTask<Void, Void, Void> {

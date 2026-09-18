@@ -1,4 +1,5 @@
-<merge xmlns:android="http://schemas.android.com/apk/res/android">
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="fill_parent">
+	<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/top_progress" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"/>
 	<ScrollView android:id="@+id/viewSerie" android:layout_width="fill_parent" android:layout_height="fill_parent">
 	<LinearLayout android:layout_width="fill_parent" android:layout_height="wrap_content" android:orientation="vertical">
 		<LinearLayout android:layout_width="fill_parent" android:layout_height="wrap_content" android:padding="6dp">
@@ -30,4 +31,4 @@
 	</LinearLayout>
 	</ScrollView>
 	<WebView android:id="@+id/posterView" android:layout_width="fill_parent" android:layout_height="fill_parent" android:layout_margin="4dp" android:layout_gravity="center" android:scrollbars="none" android:visibility="gone"/>
-</merge>
+</LinearLayout>

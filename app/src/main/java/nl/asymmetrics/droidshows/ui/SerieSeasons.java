@@ -47,12 +47,15 @@ public class SerieSeasons extends AppCompatActivity
 	private static SQLiteStore db;
 
 	@Override
+	private nl.asymmetrics.droidshows.TopProgressBinder progressBinder;
+
 	public void onCreate(Bundle savedInstanceState) {
 		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
 		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);
 		this.overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.serie_seasons);
+		progressBinder = new nl.asymmetrics.droidshows.TopProgressBinder(this);
 		listView = (ListView) findViewById(android.R.id.list);
 		View emptyView = findViewById(android.R.id.empty);
 		if (emptyView != null) listView.setEmptyView(emptyView);
@@ -291,5 +294,17 @@ public class SerieSeasons extends AppCompatActivity
 	public void onBackPressed() {
 		super.onBackPressed();
 		overridePendingTransition(R.anim.left_enter, R.anim.left_exit);
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+		if (progressBinder != null) progressBinder.onResume();
+	}
+
+	@Override
+	protected void onPause() {
+		if (progressBinder != null) progressBinder.onPause();
+		super.onPause();
 	}
 }
