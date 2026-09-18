@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="fill_parent">
+	<com.google.android.material.appbar.AppBarLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+		<com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar" android:layout_width="match_parent" android:layout_height="?attr/actionBarSize" app:title="@string/discover" app:navigationIcon="@drawable/ic_arrow_back"/>
+		<com.google.android.material.tabs.TabLayout android:id="@+id/discover_tabs" android:layout_width="match_parent" android:layout_height="wrap_content" app:tabMode="fixed" app:tabGravity="fill">
+			<com.google.android.material.tabs.TabItem android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_tv_shows"/>
+			<com.google.android.material.tabs.TabItem android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_movies"/>
+		</com.google.android.material.tabs.TabLayout>
+	</com.google.android.material.appbar.AppBarLayout>
+	<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/top_progress" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"/>
+	<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+		<ListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
+		<TextView android:id="@+id/android:empty" android:layout_width="fill_parent" android:layout_height="fill_parent" android:gravity="center" android:padding="16dp" android:text="@string/discover_empty"/>
+	</FrameLayout>
+</LinearLayout>

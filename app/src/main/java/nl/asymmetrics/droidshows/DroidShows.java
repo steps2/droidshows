@@ -163,6 +163,7 @@ public class DroidShows extends AppCompatActivity
 	private static final int OPTIONS_MENU_ITEM = UPDATEALL_MENU_ITEM + 1;
 	private static final int EXIT_MENU_ITEM = OPTIONS_MENU_ITEM + 1;
 	private static final int BACKUP_NOW_MENU_ITEM = EXIT_MENU_ITEM + 1;
+	private static final int DISCOVER_MENU_ITEM = BACKUP_NOW_MENU_ITEM + 1;
 	private static final int REQ_RESTORE_BACKUP = 1001;
 	private static final int REQ_BACKUP_NOW = 1002;
 	/* Context Menus */
@@ -366,6 +367,11 @@ public class DroidShows extends AppCompatActivity
 		navView = (NavigationView) findViewById(R.id.nav_view);
 		navView.setNavigationItemSelectedListener(new NavigationView.OnNavigationItemSelectedListener() {
 			@Override public boolean onNavigationItemSelected(MenuItem item) {
+				if (item.getItemId() == R.id.nav_discover) {
+					drawerLayout.closeDrawer(navView);
+					startActivity(new Intent(DroidShows.this, nl.asymmetrics.droidshows.ui.DiscoverActivity.class));
+					return true;
+				}
 				int position = (item.getItemId() == R.id.nav_movies) ? 1 : 0;
 				drawerLayout.closeDrawer(navView);
 				if (position != mediaType) { mediaType = position; getSeries(); }
@@ -692,15 +698,16 @@ public class DroidShows extends AppCompatActivity
 	/* Everything that used to live in the ⋮ overflow now lives in the + button popup. */
 	private void populatePlusMenu(Menu menu) {
 		menu.add(0, ADD_SERIE_MENU_ITEM, 0, "").setIcon(menuIcon(R.drawable.ic_menu_add));
-		menu.add(0, SEARCH_MENU_ITEM, 1, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search));
-		menu.add(0, UPDATEALL_MENU_ITEM, 2, "").setIcon(menuIcon(R.drawable.ic_menu_sync));
-		menu.add(0, FILTER_MENU_ITEM, 3, "").setIcon(menuIcon(R.drawable.ic_menu_filter_list));
-		menu.add(0, SORT_MENU_ITEM, 4, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
-		menu.add(0, SEEN_MENU_ITEM, 5, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
-		menu.add(0, UNDO_MENU_ITEM, 6, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
-		menu.add(0, OPTIONS_MENU_ITEM, 7, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
-		menu.add(0, BACKUP_NOW_MENU_ITEM, 8, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
-		menu.add(0, EXIT_MENU_ITEM, 9, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
+		menu.add(0, DISCOVER_MENU_ITEM, 1, getString(R.string.discover)).setIcon(menuIcon(R.drawable.ic_discover_compass));
+		menu.add(0, SEARCH_MENU_ITEM, 2, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search));
+		menu.add(0, UPDATEALL_MENU_ITEM, 3, "").setIcon(menuIcon(R.drawable.ic_menu_sync));
+		menu.add(0, FILTER_MENU_ITEM, 4, "").setIcon(menuIcon(R.drawable.ic_menu_filter_list));
+		menu.add(0, SORT_MENU_ITEM, 5, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
+		menu.add(0, SEEN_MENU_ITEM, 6, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
+		menu.add(0, UNDO_MENU_ITEM, 7, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
+		menu.add(0, OPTIONS_MENU_ITEM, 8, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
+		menu.add(0, BACKUP_NOW_MENU_ITEM, 9, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
+		menu.add(0, EXIT_MENU_ITEM, 10, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
 	}
 
 	private void preparePlusMenu(Menu menu) {
@@ -760,6 +767,9 @@ public class DroidShows extends AppCompatActivity
 		switch (item.getItemId()) {
 			case ADD_SERIE_MENU_ITEM :
 				searchForShow(null);	// AddSerie or AddMovie, depending on the current section
+				break;
+			case DISCOVER_MENU_ITEM :
+				startActivity(new Intent(DroidShows.this, nl.asymmetrics.droidshows.ui.DiscoverActivity.class));
 				break;
 			case SEARCH_MENU_ITEM :
 				onSearchRequested();

@@ -39,6 +39,7 @@
 		<meta-data android:name="android.app.searchable" android:resource="@layout/add_movie_search"/>
 	</activity>
 	<activity android:name=".ui.SerieSeasons" android:configChanges="orientation|screenSize"/>
+	<activity android:name=".ui.DiscoverActivity" android:configChanges="orientation|screenSize"/>
 	<activity android:name=".ui.SerieEpisodes" android:configChanges="orientation|screenSize"/>
 	<activity android:name=".ui.ViewEpisode" android:configChanges="orientation|screenSize"/>
 	<activity android:label="@string/menu_context_view_serie_details" android:name=".ui.ViewSerie" android:configChanges="orientation|screenSize"/>

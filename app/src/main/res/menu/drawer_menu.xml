@@ -1,4 +1,5 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 	<item android:id="@+id/nav_tv" android:title="@string/media_tv_shows" android:icon="@drawable/ic_drawer_tv"/>
 	<item android:id="@+id/nav_movies" android:title="@string/media_movies" android:icon="@drawable/ic_drawer_movie"/>
+	<item android:id="@+id/nav_discover" android:title="@string/discover" android:icon="@drawable/ic_discover_compass"/>
 </menu>

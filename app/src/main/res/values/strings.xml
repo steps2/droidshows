@@ -50,6 +50,12 @@
 <string name="theme_amoled">AMOLED black</string>
 <string name="crash_title">The app crashed</string>
 <string name="share">Share</string>
+<string name="discover">Discover</string>
+<string name="discover_empty">Nothing found. Check your connection and try again.</string>
+<string name="discover_add">Add to library</string>
+<string name="discover_poster_desc">Poster</string>
+<string name="discover_no_key">Add your TMDB API key in Settings to discover movies.</string>
+<string name="discover_already">Already in your library</string>
 <string name="dialog_use_mirror">Use TheTVDB mirror (try this if updates are too slow)</string>
 <string name="dialog_restore">Restore</string>
 <string name="dialog_restore_now">Restoring a backup will remove all information currently in TVMovie Tracker. Continue?</string>

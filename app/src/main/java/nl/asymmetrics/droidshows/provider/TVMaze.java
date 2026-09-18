@@ -99,6 +99,52 @@ public class TVMaze {
 	}
 
 	/**
+	 * Shows airing today (US schedule), de-duplicated by show. Used by
+	 * Discover as a "what's on" feed. Returns null on failure.
+	 *
+	 * @throws JsonFetcher.RateLimitException on HTTP 429 so callers can
+	 *         back off and retry instead of treating it as a dead feed.
+	 */
+	public List<Serie> getScheduleShows() throws JsonFetcher.RateLimitException {
+		throttleApi();
+		List<Serie> results = new ArrayList<Serie>();
+		try {
+			String date = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date());
+			JSONArray eps = JsonFetcher.getJsonArray(BASE + "/schedule?country=US&date=" + date);
+			java.util.LinkedHashMap<String, Serie> seen = new java.util.LinkedHashMap<String, Serie>();
+			for (int i = 0; i < eps.length(); i++) {
+				JSONObject entry = eps.optJSONObject(i);
+				if (entry == null) continue;
+				JSONObject show = entry.optJSONObject("show");
+				if (show == null) continue;
+				String id = String.valueOf(show.optInt("id", 0));
+				if (id.equals("0") || seen.containsKey(id)) continue;
+				Serie serie = new Serie();
+				serie.setId(id);
+				serie.setSerieId(id);
+				serie.setSerieName(show.optString("name", ""));
+				serie.setOverview(HtmlUtil.stripHtml(show.optString("summary", null)));
+				serie.setFirstAired(show.optString("premiered", ""));
+				serie.setPoster(imageUrl(show));
+				serie.setLanguage(show.optString("language", ""));
+				serie.setTvmazeId(id);
+				serie.setMediaType(0);
+				JSONObject network = show.optJSONObject("network");
+				if (network == null) network = show.optJSONObject("webChannel");
+				if (network != null) serie.setNetwork(network.optString("name", ""));
+				seen.put(id, serie);
+			}
+			results.addAll(seen.values());
+		} catch (JsonFetcher.RateLimitException e) {
+			throw e;
+		} catch (Exception e) {
+			Log.e(TAG, "getScheduleShows failed: " + e.getMessage());
+			return null;
+		}
+		return results;
+	}
+
+	/**
 	 * Fetch a full show record (with cast) plus all its episodes.
 	 * Returns null on any failure.
 	 *

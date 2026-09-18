@@ -50,30 +50,49 @@ public class TMDB {
 			String json = fetchJson(url);
 			if (json == null) return null;
 			JSONObject root = new JSONObject(json);
-			JSONArray results = root.optJSONArray("results");
-			List<Serie> movies = new ArrayList<Serie>();
-			if (results != null) {
-				for (int i = 0; i < results.length(); i++) {
-					JSONObject m = results.optJSONObject(i);
-					if (m == null) continue;
-					Serie s = new Serie();
-					String id = String.valueOf(m.optInt("id", 0));
-					s.setId(id);
-					s.setSerieId(id);
-					s.setSerieName(m.optString("title", ""));
-					s.setOverview(m.optString("overview", ""));
-					s.setFirstAired(m.optString("release_date", ""));
-					s.setPoster(imageUrl(m.optString("poster_path", null), "w500"));
-					s.setLanguage("");
-					s.setMediaType(1);
-					movies.add(s);
-				}
-			}
-			return movies;
+			return parseMovieList(root.optJSONArray("results"));
 		} catch (Exception e) {
 			Log.e(TAG, "searchMovies failed: " + e.getMessage());
 			return null;
 		}
+	}
+
+	/**
+	 * The week's trending movies. Returns null on connection/auth failure.
+	 */
+	public List<Serie> getTrendingMovies() {
+		String url = BASE + "/trending/movie/week?api_key=" + apiKey + "&include_adult=false";
+		String json = fetchJson(url);
+		if (json == null) return null;
+		try {
+			JSONObject root = new JSONObject(json);
+			return parseMovieList(root.optJSONArray("results"));
+		} catch (Exception e) {
+			Log.e(TAG, "getTrendingMovies failed: " + e.getMessage());
+			return null;
+		}
+	}
+
+	private List<Serie> parseMovieList(JSONArray results) {
+		List<Serie> movies = new ArrayList<Serie>();
+		if (results != null) {
+			for (int i = 0; i < results.length(); i++) {
+				JSONObject m = results.optJSONObject(i);
+				if (m == null) continue;
+				Serie s = new Serie();
+				String id = String.valueOf(m.optInt("id", 0));
+				s.setId(id);
+				s.setSerieId(id);
+				s.setSerieName(m.optString("title", ""));
+				s.setOverview(m.optString("overview", ""));
+				s.setFirstAired(m.optString("release_date", ""));
+				s.setPoster(imageUrl(m.optString("poster_path", null), "w500"));
+				s.setLanguage("");
+				s.setMediaType(1);
+				movies.add(s);
+			}
+		}
+		return movies;
 	}
 
 	/**
