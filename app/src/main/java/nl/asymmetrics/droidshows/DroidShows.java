@@ -88,6 +88,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewParent;
 import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -243,6 +244,11 @@ public class DroidShows extends AppCompatActivity
 	private View openSwipeRow = null;
 	private int swipeActionWidthPx;
 	private int swipeTouchSlop;
+	/* Tab-strip swipe (beta 34): detected in dispatchTouchEvent, because the
+	 * tabs themselves consume touches and a view-level listener never fires. */
+	private TabLayout tabStrip = null;
+	private boolean tabArmed = false;
+	private float tabDownX, tabDownY;
 	private static AsyncInfo asyncInfo;
 	private static EditText searchV;
 	private InputMethodManager keyboard;
@@ -364,6 +370,9 @@ public class DroidShows extends AppCompatActivity
 				onListItemClick((ListView) parent, view, position, id);
 			}
 		});
+		/* Row-swipe detection (beta 34): the listener sits on the ListView,
+		 * the only place that reliably sees the whole gesture. */
+		listView.setOnTouchListener(listSwipeListener);
 		listView.setDivider(null);
 		listView.setOverscrollHeader(getResources().getDrawable(R.drawable.shape_gradient_ring));
 		if (savedInstanceState != null) {
@@ -431,41 +440,54 @@ public class DroidShows extends AppCompatActivity
 			public void onTabUnselected(TabLayout.Tab tab) {}
 			public void onTabReselected(TabLayout.Tab tab) {}
 		});
-		/* Swipe sideways on the tab strip to circle through Watching / Finished / History. */
-		modeTabs.setOnTouchListener(new View.OnTouchListener() {
-			private float downX, downY;
-			private boolean armed;
-			public boolean onTouch(View v, MotionEvent event) {
-				switch (event.getActionMasked()) {
-					case MotionEvent.ACTION_DOWN:
-						downX = event.getX();
-						downY = event.getY();
-						armed = true;
-						break;
-					case MotionEvent.ACTION_MOVE:
-						if (armed) {
-							float dx = event.getX() - downX;
-							float dy = event.getY() - downY;
-							if (Math.abs(dx) > swipeTouchSlop && Math.abs(dx) > Math.abs(dy) * 2) {
-								armed = false;
-								cycleTab(dx < 0 ? 1 : -1);
-							}
-						}
-						break;
-					case MotionEvent.ACTION_UP:
-					case MotionEvent.ACTION_CANCEL:
-						armed = false;
-						break;
-				}
-				return false;	// let TabLayout keep handling taps
-			}
-		});
+		/* Keep a reference for the activity-level tab-strip swipe detection. */
+		tabStrip = modeTabs;
 		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close);
 		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow (beta-3 behavior preserved).
 		HamburgerDrawable hamburger = new HamburgerDrawable(this);
 		hamburger.setColor(drawerToggle.getDrawerArrowDrawable().getColor());
 		drawerToggle.setDrawerArrowDrawable(hamburger);
 		drawerLayout.addDrawerListener(drawerToggle);
+	}
+
+	/* Swipe sideways on the Watching / Finished / History tab strip to circle
+	 * through the sections. Detected here because the tabs consume their own
+	 * touches, so a listener on the TabLayout itself would never fire.
+	 * Purely observational: the event stream always continues to the views. */
+	@Override
+	public boolean dispatchTouchEvent(MotionEvent event) {
+		switch (event.getActionMasked()) {
+			case MotionEvent.ACTION_DOWN:
+				tabArmed = false;
+				if (tabStrip != null && tabStrip.getVisibility() == View.VISIBLE) {
+					int[] loc = new int[2];
+					tabStrip.getLocationOnScreen(loc);
+					float x = event.getRawX(), y = event.getRawY();
+					// keep the screen's left edge for the navigation drawer
+					if (x >= loc[0] + swipeActionWidthPx / 4 && x <= loc[0] + tabStrip.getWidth()
+							&& y >= loc[1] && y <= loc[1] + tabStrip.getHeight()) {
+						tabDownX = x;
+						tabDownY = y;
+						tabArmed = true;
+					}
+				}
+				break;
+			case MotionEvent.ACTION_MOVE:
+				if (tabArmed) {
+					float dx = event.getRawX() - tabDownX;
+					float dy = event.getRawY() - tabDownY;
+					if (Math.abs(dx) > swipeTouchSlop && Math.abs(dx) > Math.abs(dy) * 2) {
+						tabArmed = false;
+						cycleTab(dx < 0 ? 1 : -1);
+					}
+				}
+				break;
+			case MotionEvent.ACTION_UP:
+			case MotionEvent.ACTION_CANCEL:
+				tabArmed = false;
+				break;
+		}
+		return super.dispatchTouchEvent(event);
 	}
 
 	/* Persist uncaught exceptions so the next launch can show what crashed. */
@@ -1691,7 +1713,9 @@ public class DroidShows extends AppCompatActivity
 		final boolean canWatch = canMarkNextEpSeen(serie);
 		if (holder.actionWatched != null)
 			holder.actionWatched.setVisibility(canWatch ? View.VISIBLE : View.INVISIBLE);
-		holder.fg.setOnTouchListener(new RowSwipeTouchListener(holder.fg, canWatch));
+		/* No touch listener on the row itself: swipe detection lives on the
+		 * ListView (listSwipeListener), since a row-level listener never
+		 * receives MOVEs once the ListView intercepts the stream. */
 		if (holder.actionWatched != null) {
 			holder.actionWatched.setOnClickListener(new View.OnClickListener() {
 				public void onClick(View v) {
@@ -1735,6 +1759,135 @@ public class DroidShows extends AppCompatActivity
 		}
 	}
 
+	/* Shared row-swipe driver (beta 34): swipe detection lives at ListView
+	 * level, because a row-level listener never receives MOVEs — when no
+	 * child consumes the DOWN, the ListView intercepts the rest of the
+	 * stream for itself. The poster icon consumes its own DOWN, so the icon
+	 * path drives the same methods. Only deltas are used, so the event's
+	 * coordinate space does not matter. */
+	private View swipeRowFg = null;
+	private boolean swipeRowCanWatch = false;
+	private float swipeDownX, swipeDownY, swipeStartTx;
+	private boolean swipeDragging = false;
+
+	private void beginRowSwipe(View fg, boolean canWatch, float downX, float downY) {
+		if (openSwipeRow != null && openSwipeRow != fg)
+			closeOpenSwipeRow();
+		swipeRowFg = fg;
+		swipeRowCanWatch = canWatch;
+		swipeDownX = downX;
+		swipeDownY = downY;
+		swipeStartTx = fg.getTranslationX();
+		swipeDragging = false;
+	}
+
+	/* Returns true when the swipe is driving the row (caller should consume). */
+	private boolean moveRowSwipe(float x, float y) {
+		if (swipeRowFg == null)
+			return false;
+		float dx = x - swipeDownX, dy = y - swipeDownY;
+		if (!swipeDragging && Math.abs(dx) > swipeTouchSlop && Math.abs(dx) > Math.abs(dy) * 2) {
+			swipeDragging = true;
+			View actions = ((View) swipeRowFg.getParent()).findViewById(R.id.row_actions);
+			if (actions != null)
+				actions.setVisibility(View.VISIBLE);
+			listView.requestDisallowInterceptTouchEvent(true);
+		}
+		if (swipeDragging) {
+			float tx = swipeStartTx + dx;
+			if (tx > 0 && !swipeRowCanWatch)
+				tx = 0;	// no watched action available for this row
+			if (tx > swipeActionWidthPx)
+				tx = swipeActionWidthPx;
+			else if (tx < -swipeActionWidthPx)
+				tx = -swipeActionWidthPx;
+			swipeRowFg.setTranslationX(tx);
+			return true;
+		}
+		return false;
+	}
+
+	/* Returns true when the stream should be consumed (was dragging, or a
+	 * tap that only closed a parked-open row). */
+	private boolean endRowSwipe() {
+		if (swipeRowFg == null)
+			return false;
+		View fg = swipeRowFg;
+		swipeRowFg = null;
+		listView.requestDisallowInterceptTouchEvent(false);
+		if (swipeDragging) {
+			swipeDragging = false;
+			float tx = fg.getTranslationX();
+			if (tx > swipeActionWidthPx / 2)
+				parkOpenRow(fg, swipeActionWidthPx);
+			else if (tx < -swipeActionWidthPx / 2)
+				parkOpenRow(fg, -swipeActionWidthPx);
+			else
+				closeOpenSwipeRow();
+			return true;
+		}
+		if (openSwipeRow == fg) {
+			closeOpenSwipeRow();
+			return true;
+		}
+		return false;
+	}
+
+	private void cancelRowSwipe() {
+		if (swipeRowFg != null && swipeDragging) {
+			final View fg = swipeRowFg;
+			fg.animate().translationX(swipeStartTx).setDuration(150).withEndAction(new Runnable() {
+				public void run() {
+					if (fg.getTranslationX() == 0) {
+						View actions = ((View) fg.getParent()).findViewById(R.id.row_actions);
+						if (actions != null)
+							actions.setVisibility(View.GONE);
+					}
+				}
+			}).start();
+		}
+		swipeRowFg = null;
+		swipeDragging = false;
+		listView.requestDisallowInterceptTouchEvent(false);
+	}
+
+	/* Row swipes are detected on the ListView itself (see driver above). */
+	private final View.OnTouchListener listSwipeListener = new View.OnTouchListener() {
+		public boolean onTouch(View v, MotionEvent event) {
+			switch (event.getActionMasked()) {
+				case MotionEvent.ACTION_DOWN: {
+					int pos = listView.pointToPosition((int) event.getX(), (int) event.getY());
+					if (pos != ListView.INVALID_POSITION) {
+						View row = listView.getChildAt(pos - listView.getFirstVisiblePosition());
+						View fg = row != null ? row.findViewById(R.id.row_foreground) : null;
+						if (fg != null) {
+							TVShowItem item = seriesAdapter.getItem(pos);
+							beginRowSwipe(fg, item != null && canMarkNextEpSeen(item), event.getX(), event.getY());
+						} else {
+							cancelRowSwipe();
+						}
+					} else {
+						cancelRowSwipe();
+						closeOpenSwipeRow();
+					}
+					break;
+				}
+				case MotionEvent.ACTION_MOVE:
+					if (moveRowSwipe(event.getX(), event.getY()))
+						return true;
+					break;
+				case MotionEvent.ACTION_UP:
+					if (endRowSwipe())
+						return true;
+					break;
+				case MotionEvent.ACTION_CANCEL:
+					cancelRowSwipe();
+					break;
+			}
+			return false;
+		}
+	};
+
 	/* Circle through Watching -> Finished -> History -> Watching. */
 	private void cycleTab(int direction) {
 		TabLayout modeTabs = (TabLayout) findViewById(R.id.mode_tabs);
@@ -1745,77 +1898,6 @@ public class DroidShows extends AppCompatActivity
 		TabLayout.Tab tab = modeTabs.getTabAt(next);
 		if (tab != null)
 			tab.select();
-	}
-
-	/* Swipe a row sideways to reveal its actions. The row parks open until an
-	 * action is tapped, another row is touched, or the tab changes. A plain tap
-	 * still opens the show; a tap on a parked-open row closes it instead. */
-	private class RowSwipeTouchListener implements View.OnTouchListener {
-		private final View fg;
-		private final boolean canWatch;
-		private float downX, downY, startTx;
-		private boolean dragging;
-
-		RowSwipeTouchListener(View fg, boolean canWatch) {
-			this.fg = fg;
-			this.canWatch = canWatch;
-		}
-
-		public boolean onTouch(View v, MotionEvent event) {
-			switch (event.getActionMasked()) {
-				case MotionEvent.ACTION_DOWN:
-					downX = event.getX();
-					downY = event.getY();
-					startTx = fg.getTranslationX();
-					dragging = false;
-					if (openSwipeRow != null && openSwipeRow != fg)
-						closeOpenSwipeRow();
-					break;
-				case MotionEvent.ACTION_MOVE: {
-					float dx = event.getX() - downX;
-					float dy = event.getY() - downY;
-					if (!dragging && Math.abs(dx) > swipeTouchSlop && Math.abs(dx) > Math.abs(dy) * 2) {
-						dragging = true;
-						View actions = ((View) v.getParent()).findViewById(R.id.row_actions);
-						if (actions != null)
-							actions.setVisibility(View.VISIBLE);
-						v.getParent().requestDisallowInterceptTouchEvent(true);
-					}
-					if (dragging) {
-						float tx = startTx + dx;
-						if (tx > 0 && !canWatch)
-							tx = 0;	// no watched action available for this row
-						if (tx > swipeActionWidthPx)
-							tx = swipeActionWidthPx;
-						else if (tx < -swipeActionWidthPx)
-							tx = -swipeActionWidthPx;
-						fg.setTranslationX(tx);
-						return true;
-					}
-					break;
-				}
-				case MotionEvent.ACTION_UP:
-				case MotionEvent.ACTION_CANCEL: {
-					if (dragging) {
-						dragging = false;
-						float tx = fg.getTranslationX();
-						if (tx > swipeActionWidthPx / 2)
-							parkOpenRow(fg, swipeActionWidthPx);
-						else if (tx < -swipeActionWidthPx / 2)
-							parkOpenRow(fg, -swipeActionWidthPx);
-						else
-							closeOpenSwipeRow();
-						return true;
-					}
-					if (openSwipeRow == fg) {
-						closeOpenSwipeRow();
-						return true;
-					}
-					break;
-				}
-			}
-			return false;
-		}
 	}
 
 	private void markLastEpUnseen() {
@@ -2930,12 +3012,47 @@ public class DroidShows extends AppCompatActivity
 		};
 
 		private OnTouchListener iconTouchListener = new OnTouchListener() {
+			/* The poster icon consumes every touch, so a swipe starting on it
+			 * would never reach the ListView's swipe detection. Drive the
+			 * shared row-swipe methods here instead (only deltas are used,
+			 * so the event's coordinate space does not matter). */
 			public boolean onTouch(View v, MotionEvent event) {
-				iconListPosition = listView.getPositionForView(v);
-				iconGestureDetector.onTouchEvent(event);
+				int action = event.getActionMasked();
+				boolean swipeConsumed = false;
+				if (action == MotionEvent.ACTION_DOWN) {
+					View fg = findRowForeground(v);
+					if (fg != null) {
+						int pos = listView.getPositionForView(v);
+						TVShowItem item = pos != ListView.INVALID_POSITION ? seriesAdapter.getItem(pos) : null;
+						beginRowSwipe(fg, item != null && canMarkNextEpSeen(item), event.getX(), event.getY());
+					} else {
+						cancelRowSwipe();
+					}
+				} else if (action == MotionEvent.ACTION_MOVE) {
+					swipeConsumed = moveRowSwipe(event.getX(), event.getY());
+				} else if (action == MotionEvent.ACTION_UP) {
+					swipeConsumed = endRowSwipe();
+				} else if (action == MotionEvent.ACTION_CANCEL) {
+					cancelRowSwipe();
+				}
+				if (!swipeConsumed) {
+					iconListPosition = listView.getPositionForView(v);
+					iconGestureDetector.onTouchEvent(event);
+				}
 				return true;
 			}
 		};
+
+		/* Walk up from a row child (e.g. the poster icon) to the sliding card. */
+		private View findRowForeground(View v) {
+			ViewParent p = v.getParent();
+			while (p instanceof View) {
+				if (((View) p).getId() == R.id.row_foreground)
+					return (View) p;
+				p = p.getParent();
+			}
+			return null;
+		}
 
 		private final SimpleOnGestureListener iconGestureListener = new SimpleOnGestureListener() {
 			@Override
