@@ -49,6 +49,7 @@
 <string name="theme_dark">Dark</string>
 <string name="theme_amoled">AMOLED black</string>
 <string name="crash_title">The app crashed</string>
+<string name="share">Share</string>
 <string name="dialog_use_mirror">Use TheTVDB mirror (try this if updates are too slow)</string>
 <string name="dialog_restore">Restore</string>
 <string name="dialog_restore_now">Restoring a backup will remove all information currently in TVMovie Tracker. Continue?</string>

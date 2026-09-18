@@ -177,11 +177,8 @@ public class DroidShows extends AppCompatActivity
 	private static final int SYNOPSIS_LANGUAGE = UPDATE_CONTEXT + 1;
 	private static final int DELETE_CONTEXT = SYNOPSIS_LANGUAGE + 1;
 	private static AlertDialog m_AlertDlg;
-	private static androidx.appcompat.app.AlertDialog m_ProgressDialog = null;
-	private static TextView m_ProgressMsg = null;
-	private static AlertDialog updateAllSeriesDlg = null;
-	private static TextView updateAllSeriesMsg = null;
-	private static LinearProgressIndicator updateAllSeriesBar = null;
+	private LinearProgressIndicator topProgress = null;
+	private volatile int updateAllDone = 0;
 	private boolean swipeTriggered = false;	// kept for the update dialog logic; the pull gesture is removed
 	private volatile boolean updatingAll = false;
 	public static SeriesAdapter seriesAdapter;
@@ -452,6 +449,14 @@ public class DroidShows extends AppCompatActivity
 						.setTitle(R.string.crash_title)
 						.setView(sv)
 						.setPositiveButton(android.R.string.ok, null)
+						.setNeutralButton(R.string.share, new DialogInterface.OnClickListener() {
+							public void onClick(DialogInterface dialog, int which) {
+								Intent share = new Intent(Intent.ACTION_SEND);
+								share.setType("text/plain");
+								share.putExtra(Intent.EXTRA_TEXT, trace);
+								startActivity(Intent.createChooser(share, getString(R.string.share)));
+							}
+						})
 						.show();
 				}
 			});
@@ -1721,8 +1726,6 @@ public class DroidShows extends AppCompatActivity
 							sToUpdate.setId(serieId);
 							sToUpdate.setTvmazeId(tvmazeId == null ? "" : tvmazeId);
 						}
-						dialogMsg = getString(R.string.messages_title_updating_db) + " - " + serieName;
-						runOnUiThread(changeMessage);
 						String toastMsg = getString(R.string.menu_context_updated);
 						boolean lastSeasonOnly = !isMovie && langCode == null && latestSeasonOption == UPDATE_LATEST_SEASON_ONLY;
 						if (!db.updateSerie(sToUpdate, lastSeasonOnly))
@@ -1738,15 +1741,7 @@ public class DroidShows extends AppCompatActivity
 					}
 				}
 			};
-			View updView = View.inflate(DroidShows.this, R.layout.progress_dialog, null);
-			m_ProgressMsg = (TextView) updView.findViewById(R.id.progress_msg);
-			com.google.android.material.progressindicator.LinearProgressIndicator updBar =
-				(com.google.android.material.progressindicator.LinearProgressIndicator) updView.findViewById(R.id.progress_bar);
-			updBar.setIndeterminate(true);
-			m_ProgressMsg.setText(getString(isMovie ? R.string.messages_update_movie : R.string.messages_update_serie));
-			m_ProgressDialog = new MaterialAlertDialogBuilder(DroidShows.this)
-				.setTitle(serie.getName()).setView(updView).setCancelable(false).create();
-			m_ProgressDialog.show();
+			showTopProgress(true, 0);
 			updateShowTh = new Thread(updateserierun);
 			updateShowTh.start();
 		}
@@ -1816,19 +1811,33 @@ public class DroidShows extends AppCompatActivity
 		c.close();
 	}
 
-	private Runnable changeMessage = new Runnable() {
-		public void run() {
-			if (m_ProgressMsg != null)
-				m_ProgressMsg.setText(dialogMsg);
-		}
-	};
+	/** Non-intrusive progress: a thin bar at the top of the list; the list and app stay usable. */
+	private void showTopProgress(final boolean indeterminate, final int max) {
+		runOnUiThread(new Runnable() { public void run() {
+			if (topProgress == null) topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
+			if (topProgress == null) return;
+			topProgress.setIndeterminate(indeterminate);
+			if (!indeterminate) { topProgress.setMax(Math.max(1, max)); topProgress.setProgress(0); }
+			topProgress.setVisibility(View.VISIBLE);
+		}});
+	}
+
+	private void hideTopProgress() {
+		runOnUiThread(new Runnable() { public void run() {
+			if (topProgress == null) topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
+			if (topProgress != null) topProgress.setVisibility(View.GONE);
+		}});
+	}
+
+	private void setTopProgress(final int progress) {
+		runOnUiThread(new Runnable() { public void run() {
+			if (topProgress == null) topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
+			if (topProgress != null) topProgress.setProgress(progress);
+		}});
+	}
 
 	private void dismissUpdateProgress() {
-		final androidx.appcompat.app.AlertDialog dlg = m_ProgressDialog;
-		m_ProgressDialog = null;
-		m_ProgressMsg = null;
-		if (dlg != null)
-			runOnUiThread(new Runnable() { public void run() { dlg.dismiss(); } });
+		hideTopProgress();
 	}
 
 	public void clearFilter(View v) {
@@ -1885,13 +1894,6 @@ public class DroidShows extends AppCompatActivity
 			for (String id : ids)
 				seriesToUpdate.add(db.createTVShowItem(id));
 			final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
-			final Runnable updateMessage = new Runnable() {
-				public void run() {
-					if (!swipeTriggered && updateAllSeriesMsg != null) {
-						updateAllSeriesMsg.setText(dialogMsg);
-					}
-				}
-			};
 			final Runnable updateallseries = new Runnable() {
 				public void run() {
 					String updatesFailed = "";
@@ -1904,13 +1906,13 @@ public class DroidShows extends AppCompatActivity
 							+" for "+ (isMovie ? "movie " : "TV show ") + item.getName() +" ["+ (i+1) +"/"+ (seriesToUpdate.size()) +"]");
 						dialogMsg = item.getName() + "\u2026";
 						if (!swipeTriggered) {
+							final int done = i + 1;
 							runOnUiThread(new Runnable() {
 								public void run() {
-									if (updateAllSeriesBar != null)
-										updateAllSeriesBar.setProgress(updateAllSeriesBar.getProgress() + 1);
+									updateAllDone = done;
+									setTopProgress(done);
 								}
 							});
-							runOnUiThread(updateMessage);
 						}
 						Serie sToUpdate = null;
 						if (isMovie) {
@@ -1955,27 +1957,14 @@ public class DroidShows extends AppCompatActivity
 					if (swipeTriggered) {
 						swipeTriggered = false;
 					} else {
-						runOnUiThread(new Runnable() {
-							public void run() {
-								if (updateAllSeriesDlg != null)
-									updateAllSeriesDlg.dismiss();
-							}
-						});
+						hideTopProgress();
 					}
 					updatingAll = false;
 				}
 			};
 			if (!swipeTriggered) {
-				View updateAllView = View.inflate(this, R.layout.progress_dialog, null);
-				updateAllSeriesMsg = (TextView) updateAllView.findViewById(R.id.progress_msg);
-				updateAllSeriesBar = (LinearProgressIndicator) updateAllView.findViewById(R.id.progress_bar);
-				updateAllSeriesMsg.setText(getString(mediaType == 1 ? R.string.messages_update_movies : R.string.messages_update_series));
-				updateAllSeriesBar.setMax(seriesToUpdate.size());
-				updateAllSeriesBar.setProgress(0);
-				updateAllSeriesDlg = new MaterialAlertDialogBuilder(this)
-					.setTitle(mediaType == 1 ? R.string.messages_title_updating_movies : R.string.messages_title_updating_series)
-					.setView(updateAllView).setCancelable(false).create();
-				updateAllSeriesDlg.show();
+				updateAllDone = 0;
+				showTopProgress(false, seriesToUpdate.size());
 			}
 			updatingAll = true;
 			updateAllShowsTh = new Thread(updateallseries);
@@ -2265,8 +2254,7 @@ public class DroidShows extends AppCompatActivity
 		outState.putBoolean("searching", searching());
 		outState.putInt("showArchive", showArchive);
 		outState.putInt("mediaType", mediaType);
-		if (m_ProgressDialog != null)
-			m_ProgressDialog.dismiss();
+		hideTopProgress();
 		super.onSaveInstanceState(outState);
 	}
 

@@ -56,27 +56,22 @@ public class AddSerie extends AppCompatActivity
 	private static List<Serie> search_series = null;
 	private TVMaze tvMaze;
 	private SeriesSearchAdapter seriessearch_adapter;
-	/* DIALOGS */
-	private androidx.appcompat.app.AlertDialog m_ProgressDialog = null;
-
+	/* Non-intrusive progress: a thin bar at the top of the list; the screen stays usable. */
 	private void showProgress(int titleRes, int msgRes, boolean cancelable) {
-		dismissProgress();
-		View v = View.inflate(this, R.layout.progress_dialog, null);
-		((TextView) v.findViewById(R.id.progress_msg)).setText(msgRes);
-		com.google.android.material.progressindicator.LinearProgressIndicator bar =
-			(com.google.android.material.progressindicator.LinearProgressIndicator) v.findViewById(R.id.progress_bar);
-		bar.setIndeterminate(true);
-		m_ProgressDialog = new MaterialAlertDialogBuilder(this)
-			.setTitle(titleRes).setView(v).setCancelable(cancelable).create();
-		m_ProgressDialog.show();
+		runOnUiThread(new Runnable() { public void run() {
+			View bar = findViewById(R.id.top_progress);
+			if (bar instanceof com.google.android.material.progressindicator.LinearProgressIndicator) {
+				((com.google.android.material.progressindicator.LinearProgressIndicator) bar).setIndeterminate(true);
+				bar.setVisibility(View.VISIBLE);
+			}
+		}});
 	}
 
 	private void dismissProgress() {
-		final androidx.appcompat.app.AlertDialog dlg = m_ProgressDialog;
-		m_ProgressDialog = null;
-		if (dlg == null) return;
-		if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) dlg.dismiss();
-		else runOnUiThread(new Runnable() { public void run() { dlg.dismiss(); } });
+		runOnUiThread(new Runnable() { public void run() {
+			View bar = findViewById(R.id.top_progress);
+			if (bar != null) bar.setVisibility(View.GONE);
+		}});
 	}
 	/* Option Menus */
 	private static final int ADD_SERIE_MENU_ITEM = Menu.FIRST;
