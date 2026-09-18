@@ -56,9 +56,9 @@ public class SerieEpisodes extends AppCompatActivity {
 	private static final int SEENTIMESTAMP_CONTEXT = Menu.FIRST + 1;
 	private static final int DELEP_CONTEXT = SEENTIMESTAMP_CONTEXT + 1;
 
-	@Override
 	private nl.asymmetrics.droidshows.TopProgressBinder progressBinder;
 
+	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
 		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);

@@ -2104,6 +2104,7 @@ public class DroidShows extends AppCompatActivity
 
 	@Override
 	public void onPause() {
+		if (progressBinder != null) progressBinder.onPause();
 		super.onPause();
 		SharedPreferences.Editor ed = sharedPrefs.edit();
 		ed.putBoolean(AUTO_BACKUP_PREF_NAME, autoBackup);
@@ -2166,12 +2167,6 @@ public class DroidShows extends AppCompatActivity
 			asyncInfo = new AsyncInfo();
 			asyncInfo.execute();
 		}
-	}
-
-	@Override
-	protected void onPause() {
-		if (progressBinder != null) progressBinder.onPause();
-		super.onPause();
 	}
 
 	private static class AsyncInfo extends AsyncTask<Void, Void, Void> {

@@ -46,9 +46,9 @@ public class SerieSeasons extends AppCompatActivity
 	private SwipeDetect swipeDetect = new SwipeDetect();
 	private static SQLiteStore db;
 
-	@Override
 	private nl.asymmetrics.droidshows.TopProgressBinder progressBinder;
 
+	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
 		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);

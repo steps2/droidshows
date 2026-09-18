@@ -50,9 +50,9 @@ public class ViewEpisode extends Activity
 	private TimePickerDialog timeDialog;
 	private Calendar cal = Calendar.getInstance();
 	
-	@Override
 	private nl.asymmetrics.droidshows.TopProgressBinder progressBinder;
 
+	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
 		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);
