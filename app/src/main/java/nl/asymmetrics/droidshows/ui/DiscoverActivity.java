@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,6 +33,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import nl.asymmetrics.droidshows.DroidShows;
 import nl.asymmetrics.droidshows.R;
@@ -52,9 +56,20 @@ public class DiscoverActivity extends AppCompatActivity {
 	private TextView emptyView;
 	private LinearProgressIndicator topProgress;
 	private DiscoverAdapter adapter;
-	private final List<Serie> shows = new ArrayList<Serie>();
-	private final List<Serie> movies = new ArrayList<Serie>();
-	private final Set<String> inLibrary = new HashSet<String>();
+	/** Appended from loader threads while the UI thread reads: keep them thread-safe. */
+	private final List<Serie> shows = Collections.synchronizedList(new ArrayList<Serie>());
+	private final List<Serie> movies = Collections.synchronizedList(new ArrayList<Serie>());
+	private final Set<String> inLibrary = Collections.synchronizedSet(new HashSet<String>());
+	/** ids with an add already running; a second tap is ignored until it finishes */
+	private final Set<String> addingNow = Collections.synchronizedSet(new HashSet<String>());
+	/** bumps on every first-page load: a stale/rotated generation must not touch the new lists */
+	private final AtomicInteger loadGen = new AtomicInteger();
+	/** bumps on every library-id scan: a stale scan must not overwrite a newer one */
+	private final AtomicInteger libraryGen = new AtomicInteger();
+	/** one small pool for all poster loads instead of a raw thread per row bind */
+	private static final ExecutorService POSTER_POOL = Executors.newFixedThreadPool(4);
+	/** in-memory poster cache so rebinds don't blank and re-decode from disk */
+	private static final LruCache<String, Bitmap> POSTER_CACHE = new LruCache<String, Bitmap>(48);
 	/** tmdbId -> tvmazeId, filled in by the background resolver */
 	private final Map<String, String> tvResolved =
 		Collections.synchronizedMap(new HashMap<String, String>());
@@ -176,6 +191,9 @@ public class DiscoverActivity extends AppCompatActivity {
 		return (date != null && date.length() >= 4) ? date.substring(0, 4) : "";
 	}
 
+	/** false once the activity is finishing/destroyed (rotation): bg posts must drop then */
+	private boolean isAlive() { return !(isFinishing() || isDestroyed()); }
+
 	private void showTop(final boolean show) {
 		runOnUiThread(new Runnable() { public void run() {
 			if (topProgress == null) return;
@@ -193,6 +211,7 @@ public class DiscoverActivity extends AppCompatActivity {
 		emptyView.setText(R.string.discover_loading);
 		showTop(true);
 		final int want = tab;
+		final int gen = loadGen.incrementAndGet();
 		new Thread(new Runnable() {
 			public void run() {
 				refreshLibraryIds();
@@ -204,6 +223,7 @@ public class DiscoverActivity extends AppCompatActivity {
 				}
 				final String problem = movieProblem;
 				runOnUiThread(new Runnable() { public void run() {
+					if (gen != loadGen.get() || !isAlive()) return;	// stale or rotated: drop
 					if (want != tab) return;
 					if (want == 0) tvMore = more; else movieMore = more;
 					emptyView.setText(R.string.discover_empty);
@@ -228,6 +248,8 @@ public class DiscoverActivity extends AppCompatActivity {
 			public void run() {
 				final boolean more = (want == 0) ? loadTvPage(tvPage + 1) : loadMoviePage(moviePage + 1);
 				runOnUiThread(new Runnable() { public void run() {
+					loadingMore = false;
+					if (!isAlive() || want != tab) return;	// stale or rotated: drop
 					if (want == 0) tvMore = more; else movieMore = more;
 					refreshList();
 					showTop(false);
@@ -330,7 +352,7 @@ public class DiscoverActivity extends AppCompatActivity {
 					if (hits != null && !hits.isEmpty() && hits.get(0).getTvmazeId() != null) {
 						tvResolved.put(s.getId(), hits.get(0).getTvmazeId());
 						runOnUiThread(new Runnable() { public void run() {
-							adapter.notifyDataSetChanged();
+							if (isAlive()) adapter.notifyDataSetChanged();
 						}});
 					}
 				} catch (JsonFetcher.RateLimitException e) {
@@ -342,7 +364,8 @@ public class DiscoverActivity extends AppCompatActivity {
 	};
 
 	private void refreshLibraryIds() {
-		inLibrary.clear();
+		final int gen = libraryGen.incrementAndGet();
+		Set<String> fresh = new HashSet<String>();
 		try {
 			android.database.Cursor c = DroidShows.db.Query("SELECT id, tvmazeId, mediaType FROM series");
 			if (c != null) {
@@ -350,16 +373,23 @@ public class DiscoverActivity extends AppCompatActivity {
 					String id = c.getString(0);
 					String tvmazeId = c.getString(1);
 					boolean movie = c.getInt(2) == 1;
-					if (movie) inLibrary.add("m:" + id);
+					if (movie) fresh.add("m:" + id);
 					else {
-						inLibrary.add("t:" + id);
-						if (tvmazeId != null && !tvmazeId.isEmpty()) inLibrary.add("t:" + tvmazeId);
+						fresh.add("t:" + id);
+						if (tvmazeId != null && !tvmazeId.isEmpty()) fresh.add("t:" + tvmazeId);
 					}
 				}
 				c.close();
 			}
 		} catch (Exception e) {
 			Log.e(SQLiteStore.TAG, "Discover: could not read library ids", e);
+		}
+		// only the newest scan wins: an older one interleaved by a fast tab-switch is dropped
+		synchronized (inLibrary) {
+			if (libraryGen.get() == gen) {
+				inLibrary.clear();
+				inLibrary.addAll(fresh);
+			}
 		}
 	}
 
@@ -374,13 +404,18 @@ public class DiscoverActivity extends AppCompatActivity {
 
 	/** Add the item to the library (full details + poster), like AddSerie/AddMovie do. */
 	private void addItem(final Serie item) {
-		if (inLibrary.contains(libKeyOf(item))) {
+		final String key = libKeyOf(item);
+		if (inLibrary.contains(key)) {
 			Toast.makeText(this, R.string.discover_already, Toast.LENGTH_SHORT).show();
 			return;
+		}
+		synchronized (addingNow) {
+			if (!addingNow.add(key)) return;	// add already in flight: ignore the double-tap
 		}
 		showTop(true);
 		new Thread(new Runnable() {
 			public void run() {
+				try {
 				final boolean movie = item.getMediaType() == 1;
 				String msg;
 				boolean ok = false;
@@ -431,6 +466,9 @@ public class DiscoverActivity extends AppCompatActivity {
 					msg = getString(R.string.messages_thetvdb_con_error);
 				}
 				postAddResult(msg, ok, item);
+				} finally {
+					addingNow.remove(key);
+				}
 			}
 		}).start();
 	}
@@ -468,7 +506,9 @@ public class DiscoverActivity extends AppCompatActivity {
 	private void postAddResult(final String msg, final boolean ok, final Serie item) {
 		if (ok) inLibrary.add(libKeyOf(item));
 		runOnUiThread(new Runnable() { public void run() {
-			showTop(false);
+			if (!isAlive()) return;
+			// don't hide the app-wide bar while a load-more page fetch is still running
+			if (!loadingMore) showTop(false);
 			adapter.notifyDataSetChanged();
 			Toast.makeText(DiscoverActivity.this, msg, Toast.LENGTH_LONG).show();
 		}});
@@ -482,7 +522,7 @@ public class DiscoverActivity extends AppCompatActivity {
 			File f = new File(getFilesDir().getAbsolutePath() + "/thumbs" + url.getFile());
 			if (!f.exists()) {
 				f.getParentFile().mkdirs();
-				org.apache.commons.io.FileUtils.copyURLToFile(url, f);
+				nl.asymmetrics.droidshows.utils.Utils.downloadToFile(url, f);
 			}
 			s.setPosterInCache("true");
 			s.setPosterThumb(f.getAbsolutePath());
@@ -494,9 +534,17 @@ public class DiscoverActivity extends AppCompatActivity {
 	private void loadPosterInto(final ImageView iv, final Serie s) {
 		final String url = s.getPoster();
 		iv.setTag(url);
+		if (url == null || url.isEmpty()) {
+			iv.setImageDrawable(null);
+			return;
+		}
+		Bitmap cached = POSTER_CACHE.get(url);
+		if (cached != null) {
+			iv.setImageBitmap(cached);
+			return;
+		}
 		iv.setImageDrawable(null);
-		if (url == null || url.isEmpty()) return;
-		new Thread(new Runnable() {
+		POSTER_POOL.execute(new Runnable() {
 			public void run() {
 				Bitmap bmp = null;
 				try {
@@ -504,23 +552,28 @@ public class DiscoverActivity extends AppCompatActivity {
 					File f = new File(getFilesDir().getAbsolutePath() + "/thumbs" + u.getFile());
 					if (!f.exists()) {
 						f.getParentFile().mkdirs();
-						org.apache.commons.io.FileUtils.copyURLToFile(u, f);
+						nl.asymmetrics.droidshows.utils.Utils.downloadToFile(u, f);
 					}
 					bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
 				} catch (Exception ignored) {}
+				if (bmp != null) POSTER_CACHE.put(url, bmp);
 				final Bitmap b = bmp;
 				runOnUiThread(new Runnable() { public void run() {
-					if (url.equals(iv.getTag()) && b != null) iv.setImageBitmap(b);
+					// only apply when the view still wants this url (it may have been recycled)
+					if (b != null && url.equals(iv.getTag())) iv.setImageBitmap(b);
 				}});
 			}
-		}).start();
+		});
 	}
 
 	private class DiscoverAdapter extends BaseAdapter {
+		/** private snapshot, touched on the UI thread only: binds never race bg appends */
 		private List<Serie> items = new ArrayList<Serie>();
 
 		void setItems(List<Serie> items) {
-			this.items = items;
+			synchronized (items) {
+				this.items = new ArrayList<Serie>(items);
+			}
 			notifyDataSetChanged();
 		}
 

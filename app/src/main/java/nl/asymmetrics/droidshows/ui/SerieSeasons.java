@@ -183,6 +183,9 @@ public class SerieSeasons extends AppCompatActivity
 					int unwatched = db.getEpsUnwatched(serieId, seasonNumber);
 					seasons.get(i).setUnwatchedAired(unwatchedAired);
 					seasons.get(i).setUnwatched(unwatched);
+					// Precompute the per-season episode count here instead of
+					// running a DB query inside the adapter's getView.
+					seasons.get(i).setEpisodeCount(db.getSeasonEpisodeCount(serieId, seasonNumber));
 					if (unwatched > 0) {
 						SQLiteStore.NextEpisode nextEpisode = db.getNextEpisode(serieId, seasonNumber);
 						seasons.get(i).setNextAir(nextEpisode.firstAiredDate);
@@ -251,7 +254,10 @@ public class SerieSeasons extends AppCompatActivity
 				holder.season.setText(s.getSeason());
 			}
 			if (holder.unwatched != null) {
-				String unwatchedText = db.getSeasonEpisodeCount(serieId, s.getSNumber())
+				// Count comes from the background loader; show a placeholder
+				// until it's ready rather than querying the DB per row.
+				int episodeCount = s.getEpisodeCount();
+				String unwatchedText = (episodeCount < 0 ? "\u2026" : String.valueOf(episodeCount))
 						+" "+ strEps;
 				if (nunwatched > 0) {
 					String unwatched = "";

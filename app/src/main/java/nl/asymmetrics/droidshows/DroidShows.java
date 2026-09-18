@@ -24,6 +24,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -32,7 +33,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.commons.io.FileUtils;
 import nl.asymmetrics.droidshows.R;
 import nl.asymmetrics.droidshows.provider.JsonFetcher;
 import nl.asymmetrics.droidshows.provider.TMDB;
@@ -311,7 +311,7 @@ public class DroidShows extends AppCompatActivity
 		updateDS = new Update(db);
 		boolean needsMig = updateDS.needsUpdate();
 		if (needsMig) {
-			backup(false, backupFolder);
+			backupBlocking(backupFolder);	// must finish before the migration below
 			if (updateDS.updateDroidShows())
 				db.updateShowStats();
 			else {
@@ -325,7 +325,7 @@ public class DroidShows extends AppCompatActivity
 
 		if (!networksStr.isEmpty())
 			networks = new ArrayList<String>(Arrays.asList(networksStr.replace("[", "").replace("]", "").split(", ")));
-		series = new ArrayList<TVShowItem>();
+		series = Collections.synchronizedList(new ArrayList<TVShowItem>());
 		seriesAdapter = new SeriesAdapter(this, R.layout.row, series);
 		listView = (BounceListView) findViewById(android.R.id.list);
 		listView.setEmptyView(findViewById(android.R.id.empty));
@@ -566,6 +566,8 @@ public class DroidShows extends AppCompatActivity
 				final String failedResult = failedSb.toString();
 				runOnUiThread(new Runnable() {
 					public void run() {
+						if (isFinishing())
+							return;	// rotated away mid-migration: don't touch dead windows
 						migDlg.dismiss();
 						getSeries();
 						if (failedResult.length() > 0)
@@ -1037,14 +1039,32 @@ public class DroidShows extends AppCompatActivity
 		updateShowStatsTh.start();
 	}
 
-	private void backup(boolean auto, final String backupFolder) {
-		File source = new File(getApplicationInfo().dataDir +"/databases/DroidShows.db");
+	/* Serialise DB file copies (backup/restore) against in-flight updates: wait
+	 * for update threads to finish before the DB is closed for the copy, so a
+	 * racing query can't hit a closed database. Joins are bounded — a stuck
+	 * network read must not wedge the backup forever. */
+	private volatile boolean backupRunning = false;
+
+	private void waitForDbIdle() {
+		if (asyncInfo != null)
+			asyncInfo.cancel(true);
+		try { if (updateShowTh != null) updateShowTh.join(8000); } catch (InterruptedException e) {}
+		try { if (updateAllShowsTh != null) updateAllShowsTh.join(15000); } catch (InterruptedException e) {}
+	}
+
+	private void toastOnUi(final int resId) {
+		runOnUiThread(new Runnable() {
+			public void run() {
+				if (!isFinishing())
+					Toast.makeText(getApplicationContext(), resId, Toast.LENGTH_LONG).show();
+			}
+		});
+	}
+
+	/* Fast folder prep shared by the async backup() and the blocking
+	 * pre-migration safety backup: rotation + mkdir only, no I/O copy. */
+	private File prepareBackupDestination(String backupFolder) {
 		File destination = new File(backupFolder, "TVMovie Tracker.db");
-		if (auto && (!autoBackup ||
-				new SimpleDateFormat("yyyy-MM-dd")
-					.format(destination.lastModified()).equals(lastStatsUpdateCurrent) ||
-				source.lastModified() == destination.lastModified()))
-			return;
 		if (backupVersioning && destination.exists()) {
 			File previous0 = new File(backupFolder, "TVMovie Tracker.db0");
 			if (previous0.exists()) {
@@ -1059,36 +1079,81 @@ public class DroidShows extends AppCompatActivity
 		File folder = new File(backupFolder);
 		if (!folder.isDirectory())
 			folder.mkdir();
-		int toastTxt = R.string.dialog_backup_done;
+		return destination;
+	}
+
+	/* Synchronous safety backup, used only before a schema migration: the
+	 * copy MUST be on disk before the migration starts, so this one blocks.
+	 * It only runs when the schema actually needs an update (app upgrades). */
+	private void backupBlocking(String backupFolder) {
+		File source = new File(getApplicationInfo().dataDir +"/databases/DroidShows.db");
+		File destination = prepareBackupDestination(backupFolder);
 		try {
 			copy(source, destination);
 		} catch (IOException e) {
-			toastTxt = R.string.dialog_backup_failed;
-			e.printStackTrace();
+			Log.e(SQLiteStore.TAG, "Pre-migration backup failed", e);
 		}
-		if (!auto && toastTxt == R.string.dialog_backup_done && !backupFolder.equals(DroidShows.backupFolder)) {
-			final CharSequence[] backupFolders = {backupFolder, DroidShows.backupFolder};
-			new MaterialAlertDialogBuilder(DroidShows.this)
-				.setTitle(toastTxt)
-				.setSingleChoiceItems(backupFolders, 1, new DialogInterface.OnClickListener() {
-					public void onClick(DialogInterface dialog, int which) {
-						DroidShows.backupFolder = backupFolders[which].toString();
+	}
+
+	private void backup(boolean auto, final String backupFolder) {
+		if (backupRunning)
+			return;
+		final File source = new File(getApplicationInfo().dataDir +"/databases/DroidShows.db");
+		final File earlyCheck = new File(backupFolder, "TVMovie Tracker.db");
+		if (auto && (!autoBackup ||
+				new SimpleDateFormat("yyyy-MM-dd")
+					.format(earlyCheck.lastModified()).equals(lastStatsUpdateCurrent) ||
+				source.lastModified() == earlyCheck.lastModified()))
+			return;
+		final File destination = prepareBackupDestination(backupFolder);
+		// The actual copy is I/O-heavy: run it on a worker thread so a big
+		// database can't freeze the UI (ANR). UI feedback goes back to the
+		// main thread when the copy finishes.
+		backupRunning = true;
+		final boolean isAuto = auto;
+		new Thread(new Runnable() {
+			public void run() {
+				int toastTxt = R.string.dialog_backup_done;
+				try {
+					copy(source, destination);
+				} catch (IOException e) {
+					toastTxt = R.string.dialog_backup_failed;
+					e.printStackTrace();
+				} finally {
+					backupRunning = false;
+				}
+				final int result = toastTxt;
+				runOnUiThread(new Runnable() {
+					public void run() {
+						if (isFinishing())
+							return;
+						if (!isAuto && result == R.string.dialog_backup_done && !backupFolder.equals(DroidShows.backupFolder)) {
+							final CharSequence[] backupFolders = {backupFolder, DroidShows.backupFolder};
+							new MaterialAlertDialogBuilder(DroidShows.this)
+								.setTitle(result)
+								.setSingleChoiceItems(backupFolders, 1, new DialogInterface.OnClickListener() {
+									public void onClick(DialogInterface dialog, int which) {
+										DroidShows.backupFolder = backupFolders[which].toString();
+									}
+								})
+								.setPositiveButton(R.string.dialog_backup_usefolder, null)
+								.show();
+						}
+						if (!isAuto && listView != null) {
+							Toast.makeText(getApplicationContext(), getString(result) + " ("+ backupFolder +")", Toast.LENGTH_LONG).show();
+							asyncInfo = new AsyncInfo();
+							asyncInfo.execute();
+						}
 					}
-				})
-				.setPositiveButton(R.string.dialog_backup_usefolder, null)
-				.show();
-		}
-		if (!auto && listView != null) {
-			Toast.makeText(getApplicationContext(), getString(toastTxt) + " ("+ backupFolder +")", Toast.LENGTH_LONG).show();
-			asyncInfo = new AsyncInfo();
-			asyncInfo.execute();
-		}
+				});
+			}
+		}).start();
 	}
 
 	private void copy(File source, File destination) throws IOException {
 		if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
-			if (asyncInfo != null)
-				asyncInfo.cancel(true);
+			// Don't close the database under a running update's feet.
+			waitForDbIdle();
 			db.close();
 			try {
 				FileChannel sourceCh = null, destinationCh = null;
@@ -1179,73 +1244,100 @@ public class DroidShows extends AppCompatActivity
 		adb.show();
 	}
 
-	private void restoreFromUri(Uri uri) {
-		File tmp = new File(getCacheDir(), "restore_tmp.db");
-		try {
-			InputStream in = getContentResolver().openInputStream(uri);
-			if (in == null)
-				throw new IOException("Cannot open backup");
-			FileOutputStream out = new FileOutputStream(tmp);
-			byte[] buf = new byte[8192];
-			int n;
-			while ((n = in.read(buf)) > 0)
-				out.write(buf, 0, n);
-			out.close();
-			in.close();
-		} catch (Exception e) {
-			Log.e(SQLiteStore.TAG, "Error reading backup", e);
-			Toast.makeText(getApplicationContext(), R.string.dialog_restore_failed, Toast.LENGTH_LONG).show();
+	private void restoreFromUri(final Uri uri) {
+		if (backupRunning)
 			return;
-		}
-		if (!isValidDroidShowsDb(tmp)) {
-			tmp.delete();
-			Toast.makeText(getApplicationContext(), R.string.dialog_restore_invalid, Toast.LENGTH_LONG).show();
-			return;
-		}
-		try {
-			if (asyncInfo != null)
-				asyncInfo.cancel(true);
-			db.close();
-			File databasesDir = new File(getApplicationInfo().dataDir +"/databases");
-			File destination = new File(databasesDir, "DroidShows.db");
-			FileInputStream in = new FileInputStream(tmp);
-			FileOutputStream out = new FileOutputStream(destination);
-			byte[] buf = new byte[8192];
-			int n;
-			while ((n = in.read(buf)) > 0)
-				out.write(buf, 0, n);
-			out.close();
-			in.close();
-			tmp.delete();
-			// drop WAL/journal sidecars of the replaced database
-			File[] files = databasesDir.listFiles();
-			if (files != null)
-				for (File file : files)
-					if (!file.getName().equalsIgnoreCase("DroidShows.db"))
-						file.delete();
-			db.openDataBase();
-			// migrate the restored (possibly ancient) schema to the current one;
-			// old rows come out as TV shows (mediaType=0) with an empty tvmazeId
-			if (updateDS.needsUpdate()) {
-				if (updateDS.updateDroidShows())
-					db.updateShowStats();
-				else
-					Toast.makeText(getApplicationContext(), R.string.messages_error_dbupdate, Toast.LENGTH_LONG).show();
+		backupRunning = true;
+		// File I/O and DB work run on a worker thread; the list reload and
+		// the migration dialog go back to the UI thread at the end.
+		new Thread(new Runnable() {
+			public void run() {
+				File tmp = new File(getCacheDir(), "restore_tmp.db");
+				try {
+					InputStream in = getContentResolver().openInputStream(uri);
+					if (in == null)
+						throw new IOException("Cannot open backup");
+					FileOutputStream out = new FileOutputStream(tmp);
+					byte[] buf = new byte[8192];
+					int n;
+					while ((n = in.read(buf)) > 0)
+						out.write(buf, 0, n);
+					out.close();
+					in.close();
+				} catch (Exception e) {
+					Log.e(SQLiteStore.TAG, "Error reading backup", e);
+					tmp.delete();
+					backupRunning = false;
+					toastOnUi(R.string.dialog_restore_failed);
+					return;
+				}
+				if (!isValidDroidShowsDb(tmp)) {
+					tmp.delete();
+					backupRunning = false;
+					toastOnUi(R.string.dialog_restore_invalid);
+					return;
+				}
+				boolean migrationFailed = false;
+				try {
+					waitForDbIdle();
+					db.close();
+					try {
+						File databasesDir = new File(getApplicationInfo().dataDir +"/databases");
+						File destination = new File(databasesDir, "DroidShows.db");
+						FileInputStream in = new FileInputStream(tmp);
+						FileOutputStream out = new FileOutputStream(destination);
+						byte[] buf = new byte[8192];
+						int n;
+						while ((n = in.read(buf)) > 0)
+							out.write(buf, 0, n);
+						out.close();
+						in.close();
+						// drop WAL/journal sidecars of the replaced database
+						File[] files = databasesDir.listFiles();
+						if (files != null)
+							for (File file : files)
+								if (!file.getName().equalsIgnoreCase("DroidShows.db"))
+									file.delete();
+					} finally {
+						tmp.delete();
+						db.openDataBase();
+					}
+					// migrate the restored (possibly ancient) schema to the current one;
+					// old rows come out as TV shows (mediaType=0) with an empty tvmazeId
+					if (updateDS.needsUpdate()) {
+						if (updateDS.updateDroidShows())
+							db.updateShowStats();
+						else
+							migrationFailed = true;
+					}
+					// posters cached for another install are stale
+					File thumbs[] = new File(getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs/banners/posters").listFiles();
+					if (thumbs != null)
+						for (File thumb : thumbs)
+							thumb.delete();
+				} catch (Exception e) {
+					Log.e(SQLiteStore.TAG, "Error restoring backup", e);
+					try { db.openDataBase(); } catch (Exception e2) {}
+					backupRunning = false;
+					toastOnUi(R.string.dialog_restore_failed);
+					return;
+				}
+				backupRunning = false;
+				final boolean showMigrationError = migrationFailed;
+				runOnUiThread(new Runnable() {
+					public void run() {
+						if (isFinishing())
+							return;
+						if (showMigrationError)
+							Toast.makeText(getApplicationContext(), R.string.messages_error_dbupdate, Toast.LENGTH_LONG).show();
+						undo.clear();
+						getSeries();
+						migrateLibraryToTVMaze();
+						Toast.makeText(getApplicationContext(), R.string.dialog_restore_done, Toast.LENGTH_LONG).show();
+					}
+				});
 			}
-			// posters cached for another install are stale
-			File thumbs[] = new File(getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs/banners/posters").listFiles();
-			if (thumbs != null)
-				for (File thumb : thumbs)
-					thumb.delete();
-			undo.clear();
-			getSeries();
-			migrateLibraryToTVMaze();
-			Toast.makeText(getApplicationContext(), R.string.dialog_restore_done, Toast.LENGTH_LONG).show();
-		} catch (Exception e) {
-			Log.e(SQLiteStore.TAG, "Error restoring backup", e);
-			try { db.openDataBase(); } catch (Exception e2) {}
-			Toast.makeText(getApplicationContext(), R.string.dialog_restore_failed, Toast.LENGTH_LONG).show();
-		}
+		}).start();
 	}
 
 	private boolean isValidDroidShowsDb(File dbFile) {
@@ -1265,29 +1357,41 @@ public class DroidShows extends AppCompatActivity
 		}
 	}
 
-	private void backupToUri(Uri uri) {
-		try {
-			if (asyncInfo != null)
-				asyncInfo.cancel(true);
-			db.close();
-			File source = new File(getApplicationInfo().dataDir +"/databases", "DroidShows.db");
-			InputStream in = new FileInputStream(source);
-			OutputStream out = getContentResolver().openOutputStream(uri);
-			if (out == null)
-				throw new IOException("Cannot open destination");
-			byte[] buf = new byte[8192];
-			int n;
-			while ((n = in.read(buf)) > 0)
-				out.write(buf, 0, n);
-			out.close();
-			in.close();
-			db.openDataBase();
-			Toast.makeText(getApplicationContext(), R.string.dialog_backup_done, Toast.LENGTH_LONG).show();
-		} catch (Exception e) {
-			Log.e(SQLiteStore.TAG, "Error writing backup", e);
-			try { db.openDataBase(); } catch (Exception e2) {}
-			Toast.makeText(getApplicationContext(), R.string.dialog_backup_failed, Toast.LENGTH_LONG).show();
-		}
+	private void backupToUri(final Uri uri) {
+		if (backupRunning)
+			return;
+		backupRunning = true;
+		new Thread(new Runnable() {
+			public void run() {
+				boolean ok = true;
+				try {
+					waitForDbIdle();
+					db.close();
+					try {
+						File source = new File(getApplicationInfo().dataDir +"/databases", "DroidShows.db");
+						InputStream in = new FileInputStream(source);
+						OutputStream out = getContentResolver().openOutputStream(uri);
+						if (out == null)
+							throw new IOException("Cannot open destination");
+						byte[] buf = new byte[8192];
+						int n;
+						while ((n = in.read(buf)) > 0)
+							out.write(buf, 0, n);
+						out.close();
+						in.close();
+					} finally {
+						// Never leave the database closed.
+						db.openDataBase();
+					}
+				} catch (Exception e) {
+					Log.e(SQLiteStore.TAG, "Error writing backup", e);
+					try { db.openDataBase(); } catch (Exception e2) {}
+					ok = false;
+				}
+				backupRunning = false;
+				toastOnUi(ok ? R.string.dialog_backup_done : R.string.dialog_backup_failed);
+			}
+		}).start();
 	}
 
 	/* context menu */
@@ -1790,7 +1894,7 @@ public class DroidShows extends AppCompatActivity
 				File posterThumbFile = null;
 				try {
 					posterThumbFile = new File(posterThumbPath);
-					FileUtils.copyURLToFile(posterURL, posterThumbFile);
+					Utils.downloadToFile(posterURL, posterThumbFile);
 				} catch (IOException e) {
 					Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
 					e.printStackTrace();
@@ -1893,13 +1997,25 @@ public class DroidShows extends AppCompatActivity
 			if (swipeTriggered)
 				swipeTriggered = false;
 		} else {
-			final List<TVShowItem> seriesToUpdate = new ArrayList<TVShowItem>();
-			List<String> ids = db.getSeries(searching() ? 2 : showArchive, false, null, mediaType);
-			for (String id : ids)
-				seriesToUpdate.add(db.createTVShowItem(id));
+			// Capture UI-thread state before leaving it; the DB queries below
+			// used to run here and froze the app on large libraries.
+			final boolean wasSearching = searching();
+			final int archiveToUpdate = showArchive;
+			final int mediaToUpdate = mediaType;
 			final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
+			final boolean wasSwipe = swipeTriggered;
 			final Runnable updateallseries = new Runnable() {
 				public void run() {
+					final List<TVShowItem> seriesToUpdate = new ArrayList<TVShowItem>();
+					List<String> ids = db.getSeries(wasSearching ? 2 : archiveToUpdate, false, null, mediaToUpdate);
+					for (String id : ids)
+						seriesToUpdate.add(db.createTVShowItem(id));
+					if (!wasSwipe) {
+						updateAllDone = 0;
+						runOnUiThread(new Runnable() {
+							public void run() { showTopProgress(false, seriesToUpdate.size()); }
+						});
+					}
 					String updatesFailed = "";
 					TVMaze tvMaze = new TVMaze();
 					TMDB tmdb = new TMDB(apiKey);
@@ -1974,10 +2090,6 @@ public class DroidShows extends AppCompatActivity
 					updatingAll = false;
 				}
 			};
-			if (!swipeTriggered) {
-				updateAllDone = 0;
-				showTopProgress(false, seriesToUpdate.size());
-			}
 			updatingAll = true;
 			updateAllShowsTh = new Thread(updateallseries);
 			updateAllShowsTh.start();
@@ -2189,8 +2301,12 @@ public class DroidShows extends AppCompatActivity
 				if (!lastStatsUpdate.equals(newToday)) {
 					db.updateToday(newToday);
 //					Log.d(SQLiteStore.TAG, "AsyncInfo RUNNING | Today = "+ newToday);
-					for (int i = 0; i < series.size(); i++) {
-						TVShowItem serie = series.get(i);
+					// Iterate a snapshot: the UI thread can clear/rebuild `series`
+					// (tab switch, rotation, filter) while this background thread runs.
+					List<TVShowItem> snapshot;
+					synchronized (series) { snapshot = new ArrayList<TVShowItem>(series); }
+					for (int i = 0; i < snapshot.size(); i++) {
+						TVShowItem serie = snapshot.get(i);
 						if (isCancelled()) return null;
 						String serieId = serie.getSerieId();
 						int unwatched = db.getEpsUnwatched(serieId);
@@ -2344,7 +2460,11 @@ public class DroidShows extends AppCompatActivity
 				} else {
 					constraint = constraint.toString().toLowerCase();
 					ArrayList<TVShowItem> filteredSeries = new ArrayList<TVShowItem>();
-					for (TVShowItem serie : series) {
+					// Snapshot: the filter worker thread must not iterate `series`
+					// while the UI thread rebuilds it.
+					List<TVShowItem> snapshot;
+					synchronized (series) { snapshot = new ArrayList<TVShowItem>(series); }
+					for (TVShowItem serie : snapshot) {
 						if (serie.getName().toLowerCase().contains(constraint))
 							filteredSeries.add(serie);
 					}

@@ -74,8 +74,10 @@ public class TMDB {
 		return getTrendingMovies(1);
 	}
 
-	/** Paged trending movies; totalPages is set after each call. */
+	/** Paged trending movies; totalPages is set after each call, reset to 0
+	 *  before it so a failed request can't keep the previous call's value. */
 	public List<Serie> getTrendingMovies(int page) {
+		totalPages = 0;
 		String url = BASE + "/trending/movie/week?api_key=" + apiKey + "&include_adult=false&page=" + page;
 		String json = fetchJson(url);
 		if (json == null) return null;
@@ -123,8 +125,10 @@ public class TMDB {
 		return getTVList(category, 1);
 	}
 
-	/** Paged TV list; totalPages is set after each call. */
+	/** Paged TV list; totalPages is set after each call, reset to 0 before
+	 *  it so a failed request can't keep the previous call's value. */
 	public List<Serie> getTVList(String category, int page) {
+		totalPages = 0;
 		String url = BASE + "/tv/" + category + "?api_key=" + apiKey + "&include_adult=false&page=" + page;
 		String json = fetchJson(url);
 		if (json == null) return null;

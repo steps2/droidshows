@@ -48,7 +48,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 
-import org.apache.commons.io.FileUtils;
 
 public class AddSerie extends AppCompatActivity
 {
@@ -80,7 +79,7 @@ public class AddSerie extends AppCompatActivity
 	private Utils utils = new Utils();
 	static String searchQuery = "";
 	private SQLiteStore db;
-	private List<String> series;
+	private volatile List<String> series;
 	private AsyncAddSerie addSerieTask = null;
 	private Serie sToAdd;
 	private androidx.appcompat.widget.SearchView searchView;
@@ -115,7 +114,22 @@ public class AddSerie extends AppCompatActivity
 			}
 		});
 		db = SQLiteStore.getInstance(this);
-		series = db.getSeries(2, false, null, 0);	// 2 = archive and current shows, false = don't filter networks, null = ignore networks filter, 0 = TV shows only
+		// Loading the owned-show ids hits the DB: do it on a worker thread so
+		// the screen opens instantly. getView tolerates an empty list.
+		series = new ArrayList<String>();
+		new Thread(new Runnable() {
+			public void run() {
+				final List<String> ids = db.getSeries(2, false, null, 0);	// 2 = archive and current shows, false = don't filter networks, null = ignore networks filter, 0 = TV shows only
+				runOnUiThread(new Runnable() {
+					public void run() {
+						if (isFinishing())
+							return;
+						series = ids;
+						seriessearch_adapter.notifyDataSetChanged();
+					}
+				});
+			}
+		}).start();
 		List<Serie> search_series = new ArrayList<Serie>();
 		this.seriessearch_adapter = new SeriesSearchAdapter(this, R.layout.row_search_series, search_series);
 		listView.setAdapter(seriessearch_adapter);
@@ -230,7 +244,9 @@ public class AddSerie extends AppCompatActivity
 	private void addSerie(Serie s) {
 		if (addSerieTask == null || addSerieTask.getStatus() != AsyncTask.Status.RUNNING) {
 			addSerieTask = new AsyncAddSerie();
-			addSerieTask.execute(s);
+			// Don't use the default serial executor: one stalled poster
+			// download used to block every AsyncTask queued behind it.
+			addSerieTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, s);
 		} else {
 			Log.d(SQLiteStore.TAG, "Still busy, not adding "+ s.getSerieName());
 			Toast.makeText(getApplicationContext(), R.string.messages_error_dbupdate, Toast.LENGTH_SHORT).show();
@@ -251,7 +267,8 @@ public class AddSerie extends AppCompatActivity
 			Boolean success = false;
 			
 			boolean alreadyExists = false;
-			for (String serieId : series)
+			List<String> knownIds = series;	// local copy: the field can be replaced on the UI thread
+			for (String serieId : knownIds)
 				if (serieId.equals(s.getId()) || s.getId().equals(db.getTvmazeId(serieId))) {
 					alreadyExists = true;
 					break;
@@ -279,8 +296,13 @@ public class AddSerie extends AppCompatActivity
 					TVShowItem tvsi = new TVShowItem(sToAdd.getId(), sToAdd.getLanguage(), sToAdd.getPosterThumb(), d, sToAdd.getSerieName(), nseasons,
 						nextEpisodeStr, nextEpisode.firstAiredDate, unwatchedAired, unwatched, sToAdd.getPassiveStatus() == 1,
 						(sToAdd.getStatus() == null ? "null" : sToAdd.getStatus()), "");
-					DroidShows.series.add(tvsi);
-					series.add(sToAdd.getId());
+					DroidShows.series.add(tvsi);	// synchronizedList: safe from any thread
+					// The owned-ids list is read by getView on the UI thread:
+					// mutate it there, not here.
+					final String addedId = sToAdd.getId();
+					runOnUiThread(new Runnable() {
+						public void run() { series.add(addedId); }
+					});
 					runOnUiThread(DroidShows.updateListView);
 					success = true;
 				} catch (Exception e) {
@@ -299,6 +321,12 @@ public class AddSerie extends AppCompatActivity
 			Log.d(SQLiteStore.TAG, "Adding "+ sToAdd.getSerieName() +": getting the poster");
 			// get the poster and save it in cache
 			String poster = sToAdd.getPoster();
+			if (poster == null || poster.isEmpty()) {
+				// new URL(null) throws an unchecked NullPointerException that
+				// used to escape doInBackground, leaving the progress bar stuck
+				Log.e(SQLiteStore.TAG, sToAdd.getSerieName() +" doesn't have a poster URL");
+				return;
+			}
 			URL posterURL = null;
 			String posterThumbPath = null;
 			try {
@@ -311,7 +339,9 @@ public class AddSerie extends AppCompatActivity
 			}
 			File posterThumbFile = new File(posterThumbPath);
 			try {
-				FileUtils.copyURLToFile(posterURL, posterThumbFile);
+				// Bounded connect/read timeouts: a stalled image host must not
+				// hang this download (and the task queue) forever.
+				Utils.downloadToFile(posterURL, posterThumbFile);
 			} catch (IOException e) {
 				Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
 				e.printStackTrace();
@@ -417,7 +447,11 @@ public class AddSerie extends AppCompatActivity
 	}
 	
 	private void onListItemClick(View v, int position, long id) {
-		final Serie sToAdd = AddSerie.search_series.get(position);
+		// Read the row from the adapter, not the static search list: a newer
+		// search can replace that list while this tap is being handled.
+		final Serie sToAdd = seriessearch_adapter.getItem(position);
+		if (sToAdd == null)
+			return;
 		AlertDialog sOverview = new MaterialAlertDialogBuilder(this)
 		.setIcon(R.drawable.icon)
 		.setTitle(sToAdd.getSerieName())

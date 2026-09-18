@@ -107,6 +107,10 @@ public class SQLiteStore extends SQLiteOpenHelper
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 			return false;
+		} catch (IllegalStateException e) {
+			// database closed mid-query (e.g. backup racing an update)
+			e.printStackTrace();
+			return false;
 		}
 		return true;
 	}
@@ -117,6 +121,9 @@ public class SQLiteStore extends SQLiteOpenHelper
 		try {
 			c = db.rawQuery(query, null);
 		} catch (SQLiteException e) {
+			return null;
+		} catch (IllegalStateException e) {
+			// database closed mid-query (e.g. backup racing an update)
 			return null;
 		}
 		return c;

@@ -109,7 +109,8 @@ public class TVMaze {
 		throttleApi();
 		List<Serie> results = new ArrayList<Serie>();
 		try {
-			String date = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date());
+			String date = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+				.format(new java.util.Date());
 			JSONArray eps = JsonFetcher.getJsonArray(BASE + "/schedule?country=US&date=" + date);
 			java.util.LinkedHashMap<String, Serie> seen = new java.util.LinkedHashMap<String, Serie>();
 			for (int i = 0; i < eps.length(); i++) {
@@ -155,6 +156,7 @@ public class TVMaze {
 		throttleApi();
 		try {
 			JSONObject show = JsonFetcher.getJsonObject(BASE + "/shows/" + tvmazeId + "?embed=cast");
+			throttleApi();
 			JSONArray eps = JsonFetcher.getJsonArray(BASE + "/shows/" + tvmazeId + "/episodes?specials=1");
 
 			Serie serie = new Serie();

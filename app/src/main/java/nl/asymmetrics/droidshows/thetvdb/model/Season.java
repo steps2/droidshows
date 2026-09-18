@@ -10,6 +10,10 @@ public class Season {
 	private int unwatched;
 	private String nextEpisode;
 	private Date nextAir;
+	/* Total episode count for the season, filled by the background loader so
+	 * getView doesn't run a DB query per row. Volatile: written off the UI
+	 * thread, read on it. -1 = not loaded yet. */
+	private volatile int episodeCount = -1;
 
 	public Season(String serieId, int sNumber, String season, int unwatchedAired, int unwatched, String nextEpisode, Date nextAir) {
 		this.serieId = serieId;
@@ -67,5 +71,13 @@ public class Season {
 
 	public void setNextAir(Date nextAir) {
 		this.nextAir = nextAir;
+	}
+
+	public int getEpisodeCount() {
+		return this.episodeCount;
+	}
+
+	public void setEpisodeCount(int episodeCount) {
+		this.episodeCount = episodeCount;
 	}
 }

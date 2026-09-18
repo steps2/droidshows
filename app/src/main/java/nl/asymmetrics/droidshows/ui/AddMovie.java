@@ -47,7 +47,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 
-import org.apache.commons.io.FileUtils;
 
 public class AddMovie extends AppCompatActivity
 {
@@ -79,7 +78,7 @@ public class AddMovie extends AppCompatActivity
 	private Utils utils = new Utils();
 	static String searchQuery = "";
 	private SQLiteStore db;
-	private List<String> movies;
+	private volatile List<String> movies;
 	private String apiKey = "";
 	private AsyncAddMovie addMovieTask = null;
 	private Serie mToAdd;
@@ -115,7 +114,22 @@ public class AddMovie extends AppCompatActivity
 			}
 		});
 		db = SQLiteStore.getInstance(this);
-		movies = db.getSeries(2, false, null, 1);	// 2 = archive and current, false = don't filter networks, null = ignore networks filter, 1 = movies only
+		// Loading the owned-movie ids hits the DB: do it on a worker thread so
+		// the screen opens instantly. getView tolerates an empty list.
+		movies = new ArrayList<String>();
+		new Thread(new Runnable() {
+			public void run() {
+				final List<String> ids = db.getSeries(2, false, null, 1);	// 2 = archive and current, false = don't filter networks, null = ignore networks filter, 1 = movies only
+				runOnUiThread(new Runnable() {
+					public void run() {
+						if (isFinishing())
+							return;
+						movies = ids;
+						moviesearch_adapter.notifyDataSetChanged();
+					}
+				});
+			}
+		}).start();
 		List<Serie> search_movies = new ArrayList<Serie>();
 		this.moviesearch_adapter = new MovieSearchAdapter(this, R.layout.row_search_movies, search_movies);
 		listView.setAdapter(moviesearch_adapter);
@@ -221,7 +235,9 @@ public class AddMovie extends AppCompatActivity
 	private void addMovie(Serie s) {
 		if (addMovieTask == null || addMovieTask.getStatus() != AsyncTask.Status.RUNNING) {
 			addMovieTask = new AsyncAddMovie();
-			addMovieTask.execute(s);
+			// Don't use the default serial executor: one stalled poster
+			// download used to block every AsyncTask queued behind it.
+			addMovieTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, s);
 		} else {
 			Log.d(SQLiteStore.TAG, "Still busy, not adding "+ s.getSerieName());
 			Toast.makeText(getApplicationContext(), R.string.messages_error_dbupdate, Toast.LENGTH_SHORT).show();
@@ -242,7 +258,8 @@ public class AddMovie extends AppCompatActivity
 			Boolean success = false;
 
 			boolean alreadyExists = false;
-			for (String movieId : movies)
+			List<String> knownIds = movies;	// local copy: the field can be replaced on the UI thread
+			for (String movieId : knownIds)
 				if (movieId.equals(s.getId())) {
 					alreadyExists = true;
 					break;
@@ -269,8 +286,13 @@ public class AddMovie extends AppCompatActivity
 						nextEpisodeStr, nextEpisode.firstAiredDate, unwatchedAired, unwatched, mToAdd.getPassiveStatus() == 1,
 						(mToAdd.getStatus() == null ? "null" : mToAdd.getStatus()), "");
 					tvsi.setMediaType(1);
-					DroidShows.series.add(tvsi);
-					movies.add(mToAdd.getId());
+					DroidShows.series.add(tvsi);	// synchronizedList: safe from any thread
+					// The owned-ids list is read by getView on the UI thread:
+					// mutate it there, not here.
+					final String addedId = mToAdd.getId();
+					runOnUiThread(new Runnable() {
+						public void run() { movies.add(addedId); }
+					});
 					runOnUiThread(DroidShows.updateListView);
 					success = true;
 				} catch (Exception e) {
@@ -289,6 +311,12 @@ public class AddMovie extends AppCompatActivity
 			Log.d(SQLiteStore.TAG, "Adding "+ mToAdd.getSerieName() +": getting the poster");
 			// get the poster and save it in cache
 			String poster = mToAdd.getPoster();
+			if (poster == null || poster.isEmpty()) {
+				// new URL(null) throws an unchecked NullPointerException that
+				// used to escape doInBackground, leaving the progress bar stuck
+				Log.e(SQLiteStore.TAG, mToAdd.getSerieName() +" doesn't have a poster URL");
+				return;
+			}
 			URL posterURL = null;
 			String posterThumbPath = null;
 			try {
@@ -301,7 +329,9 @@ public class AddMovie extends AppCompatActivity
 			}
 			File posterThumbFile = new File(posterThumbPath);
 			try {
-				FileUtils.copyURLToFile(posterURL, posterThumbFile);
+				// Bounded connect/read timeouts: a stalled image host must not
+				// hang this download (and the task queue) forever.
+				Utils.downloadToFile(posterURL, posterThumbFile);
 			} catch (IOException e) {
 				Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
 				e.printStackTrace();
@@ -384,7 +414,11 @@ public class AddMovie extends AppCompatActivity
 	}
 
 	private void onListItemClick(View v, int position, long id) {
-		final Serie mToAdd = AddMovie.search_movies.get(position);
+		// Read the row from the adapter, not the static search list: a newer
+		// search can replace that list while this tap is being handled.
+		final Serie mToAdd = moviesearch_adapter.getItem(position);
+		if (mToAdd == null)
+			return;
 		AlertDialog sOverview = new MaterialAlertDialogBuilder(this)
 		.setIcon(R.drawable.icon)
 		.setTitle(mToAdd.getSerieName())
