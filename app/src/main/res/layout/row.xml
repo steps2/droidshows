@@ -2,9 +2,9 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="fill_parent" android:layout_height="wrap_content">
 	<!-- Swipe actions revealed behind the sliding card -->
 	<LinearLayout android:id="@+id/row_actions" android:layout_width="fill_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layoutDirection="ltr" android:visibility="gone" android:layout_marginStart="8dp" android:layout_marginEnd="8dp" android:layout_marginTop="4dp" android:layout_marginBottom="4dp">
-		<TextView android:id="@+id/row_action_watched" android:layout_width="96dp" android:layout_height="match_parent" android:background="#43a047" android:textColor="#ffffff" android:text="✓" android:textSize="28sp" android:gravity="center" android:contentDescription="@string/swipe_action_watched"/>
+		<TextView android:id="@+id/row_action_finished" android:layout_width="96dp" android:layout_height="match_parent" android:background="#1e88e5" android:textColor="#ffffff" android:text="▣" android:textSize="28sp" android:gravity="center" android:contentDescription="@string/swipe_action_finished"/>
 		<View android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"/>
-		<TextView android:id="@+id/row_action_delete" android:layout_width="96dp" android:layout_height="match_parent" android:background="#e53935" android:textColor="#ffffff" android:text="✕" android:textSize="28sp" android:gravity="center" android:contentDescription="@string/swipe_action_delete"/>
+		<TextView android:id="@+id/row_action_watched" android:layout_width="96dp" android:layout_height="match_parent" android:background="#43a047" android:textColor="#ffffff" android:text="✓" android:textSize="28sp" android:gravity="center" android:contentDescription="@string/swipe_action_watched"/>
 	</LinearLayout>
 	<!-- Sliding foreground: the visible row card -->
 	<com.google.android.material.card.MaterialCardView android:id="@+id/row_foreground" android:layout_width="fill_parent" android:layout_height="wrap_content" app:cardCornerRadius="12dp" android:layout_marginStart="8dp" android:layout_marginEnd="8dp" android:layout_marginTop="4dp" android:layout_marginBottom="4dp">

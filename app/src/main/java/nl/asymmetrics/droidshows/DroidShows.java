@@ -1730,16 +1730,39 @@ public class DroidShows extends AppCompatActivity
 				}
 			});
 		}
-		if (holder.actionDelete != null) {
-			holder.actionDelete.setOnClickListener(new View.OnClickListener() {
+		if (holder.actionFinished != null) {
+			/* Archive lives on the left: revealed by swiping right. Hidden in
+			 * History, mirroring the long-press menu. */
+			holder.actionFinished.setVisibility(logMode ? View.INVISIBLE : View.VISIBLE);
+			holder.actionFinished.setContentDescription(getString(
+					serie.getPassiveStatus() ? R.string.menu_unarchive : R.string.menu_archive));
+			holder.actionFinished.setOnClickListener(new View.OnClickListener() {
 				public void onClick(View v) {
-					int pos = listView.getPositionForView(holder.fg);
 					closeOpenSwipeRow();
-					if (pos != ListView.INVALID_POSITION)
-						confirmDeleteShow(pos);
+					vib.vibrate(50);
+					toggleArchived(serie);
 				}
 			});
 		}
+	}
+
+	/* Swipe-button twin of the long-press "Move to Finished" menu item. */
+	private void toggleArchived(TVShowItem serie) {
+		asyncInfo.cancel(true);
+		boolean passiveStatus = serie.getPassiveStatus();
+		db.updateSerieStatus(serie.getSerieId(), (passiveStatus ? 0 : 1));
+		if (!passiveStatus && pinnedShows.contains(serie.getSerieId()))
+			pinnedShows.remove(serie.getSerieId());
+		String message = serie.getName() + " " +
+				(passiveStatus ? getString(R.string.messages_context_unarchived) : getString(R.string.messages_context_archived));
+		Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
+		if (!searching())
+			series.remove(serie);
+		else
+			serie.setPassiveStatus(!passiveStatus);
+		listView.post(updateListView);
+		asyncInfo = new AsyncInfo();
+		asyncInfo.execute();
 	}
 
 	private void parkOpenRow(View fg, int translationX) {
@@ -1802,11 +1825,17 @@ public class DroidShows extends AppCompatActivity
 			if (actions != null)
 				actions.setVisibility(View.VISIBLE);
 			listView.requestDisallowInterceptTouchEvent(true);
+			/* The ListView never saw the MOVE (we consumed it), so its pending
+			 * long-press would still fire mid-swipe and pop the context menu.
+			 * Cancel its touch stream now that this is a swipe, not a press. */
+			MotionEvent cancel = MotionEvent.obtain(0, 0, MotionEvent.ACTION_CANCEL, 0, 0, 0);
+			listView.onTouchEvent(cancel);
+			cancel.recycle();
 		}
 		if (swipeDragging) {
+			/* The card always follows the finger (up to the tab-switch
+			 * distance); it only parks where that side has an action. */
 			float tx = swipeStartTx + dx;
-			if (tx > 0 && !swipeRowCanWatch)
-				tx = 0;	// no watched action available for this row
 			if (tx > tabSwitchDistancePx)
 				tx = tabSwitchDistancePx;
 			else if (tx < -tabSwitchDistancePx)
@@ -1845,12 +1874,16 @@ public class DroidShows extends AppCompatActivity
 		if (swipeDragging) {
 			swipeDragging = false;
 			float tx = fg.getTranslationX();
-			if (tx > swipeActionWidthPx / 2)
+			/* Park only where that side has an action: finished lives on the
+			 * right (not in History), watched on the left (when available). */
+			boolean parkRight = tx > swipeActionWidthPx / 2 && !logMode;
+			boolean parkLeft = tx < -swipeActionWidthPx / 2 && swipeRowCanWatch;
+			if (parkRight)
 				parkOpenRow(fg, swipeActionWidthPx);
-			else if (tx < -swipeActionWidthPx / 2)
+			else if (parkLeft)
 				parkOpenRow(fg, -swipeActionWidthPx);
 			else
-				snapRowClosed(fg);	// released early: bounce back, don't stick mid-drag
+				snapRowClosed(fg);	// released early, or no action on that side
 			return true;
 		}
 		if (openSwipeRow == fg) {
@@ -2886,7 +2919,7 @@ public class DroidShows extends AppCompatActivity
 				holder.fg = convertView.findViewById(R.id.row_foreground);
 				holder.rowActions = convertView.findViewById(R.id.row_actions);
 				holder.actionWatched = convertView.findViewById(R.id.row_action_watched);
-				holder.actionDelete = convertView.findViewById(R.id.row_action_delete);
+				holder.actionFinished = convertView.findViewById(R.id.row_action_finished);
 				holder.icon.getLayoutParams().height = largePostersOption ? LARGE_POSTERS_HEIGHT : ViewGroup.LayoutParams.FILL_PARENT;
 				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 					holder.context.setImageResource(R.drawable.context_material);
@@ -3138,6 +3171,6 @@ public class DroidShows extends AppCompatActivity
 		View fg;			// sliding foreground card (swipe-reveal)
 		View rowActions;	// behind-layer holding the action buttons
 		View actionWatched;
-		View actionDelete;
+		View actionFinished;
 	}
 }
