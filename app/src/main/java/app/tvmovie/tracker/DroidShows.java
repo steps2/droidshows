@@ -1443,6 +1443,9 @@ public class DroidShows extends AppCompatActivity
 						undo.clear();
 						getSeries();
 						migrateLibraryToTVMaze();
+						/* The restore wiped the poster cache: re-download
+						 * posters for shows whose file is now missing. */
+						refreshMissingPosters();
 						Toast.makeText(getApplicationContext(), R.string.dialog_restore_done, Toast.LENGTH_LONG).show();
 					}
 				});
@@ -2252,6 +2255,87 @@ public class DroidShows extends AppCompatActivity
 		}
 	}
 
+	/*
+	 * Re-download posters for library shows whose poster file is missing
+	 * (e.g. after a restore wiped the poster cache). Only shows without a
+	 * poster are fetched, so valid posters are never re-downloaded. Runs on
+	 * its own background thread with the thin top progress bar; the app
+	 * stays usable. Call from the UI thread.
+	 */
+	private void refreshMissingPosters() {
+		final String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
+		new Thread(new Runnable() {
+			public void run() {
+				final List<String[]> missing = new ArrayList<String[]>();
+				Cursor c = null;
+				try {
+					c = db.Query("SELECT id, mediaType, posterThumb FROM series");
+					if (c != null && c.moveToFirst()) {
+						do {
+							String thumb = c.getString(2);
+							if (thumb == null || thumb.isEmpty() || !new File(thumb).exists())
+								missing.add(new String[] {c.getString(0), c.getString(1)});
+						} while (c.moveToNext());
+					}
+				} catch (Exception e) {
+					Log.e(SQLiteStore.TAG, "Error collecting shows missing posters", e);
+				} finally {
+					if (c != null)
+						c.close();
+				}
+				if (missing.isEmpty() || isFinishing())
+					return;
+				runOnUiThread(new Runnable() {
+					public void run() {
+						showTopProgress(false, missing.size());
+					}
+				});
+				TVMaze tvMaze = new TVMaze();
+				TMDB tmdb = new TMDB(apiKey);
+				int done = 0;
+				for (String[] m : missing) {
+					String id = m[0];
+					boolean isMovie = "1".equals(m[1]);
+					try {
+						Serie sToUpdate = null;
+						if (isMovie) {
+							if (apiKey != null && !apiKey.isEmpty())
+								sToUpdate = tmdb.getMovie(id);
+						} else {
+							String tvmazeId = resolveTvmazeId(tvMaze, id);
+							if (tvmazeId != null && !tvmazeId.isEmpty()) {
+								sToUpdate = getTVMazeShow(tvMaze, tvmazeId);
+								if (sToUpdate != null) {
+									sToUpdate.setId(id);
+									sToUpdate.setTvmazeId(tvmazeId);
+								}
+							}
+						}
+						if (sToUpdate != null)
+							updatePosterThumb(id, sToUpdate);
+					} catch (Exception e) {
+						Log.e(SQLiteStore.TAG, "Poster refresh failed for show " + id, e);
+					}
+					done++;
+					final int progress = done;
+					runOnUiThread(new Runnable() {
+						public void run() {
+							setTopProgress(progress);
+						}
+					});
+					/* Be gentle with the APIs, like the sync loop. */
+					sleepQuietly(600);
+				}
+				runOnUiThread(new Runnable() {
+					public void run() {
+						hideTopProgress();
+						getSeries();
+					}
+				});
+			}
+		}).start();
+	}
+
 	@SuppressWarnings("deprecation")
 	public void updatePosterThumb(String serieId, Serie sToUpdate) {
 		Cursor c = DroidShows.db.Query("SELECT posterInCache, poster, posterThumb FROM series WHERE id='"+ serieId +"'");
@@ -2441,6 +2525,10 @@ public class DroidShows extends AppCompatActivity
 						} else {
 							try {
 								boolean lastSeasonOnly = !isMovie && latestSeasonOption == UPDATE_LATEST_SEASON_ONLY;
+								/* Refresh the poster before the episode write: a missing
+								 * poster must not depend on the episode update succeeding,
+								 * otherwise one failed show skips posters for the rest. */
+								updatePosterThumb(item.getSerieId(), sToUpdate);
 								if (!db.updateSerie(sToUpdate, lastSeasonOnly)) {
 									final String error = getString(R.string.messages_error_dbupdate) +" "+ sToUpdate.getSerieName();
 									Log.e(SQLiteStore.TAG, error);
@@ -2456,7 +2544,6 @@ public class DroidShows extends AppCompatActivity
 									updatesFailed += dialogMsg +" ";
 									break;
 								}
-								updatePosterThumb(item.getSerieId(), sToUpdate);
 							} catch (Exception e) {
 								e.printStackTrace();
 							}
@@ -2476,6 +2563,10 @@ public class DroidShows extends AppCompatActivity
 						hideTopProgress();
 					}
 					updatingAll = false;
+					/* Menu sync done: pick up posters missing anywhere in the
+					 * library — the sync above only covered the current tab. */
+					if (!wasSwipe)
+						refreshMissingPosters();
 				}
 			};
 			updatingAll = true;
