@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     defaultConfig {
-        applicationId "nl.asymmetrics.droidshows"
+        applicationId "app.tvmovie.tracker"
         minSdkVersion 21 // required androidx appcompat 1.7 / material 1.13
         // minSdkVersion 14 // previous: migrated android 4.0 api 14 version
         targetSdkVersion 34
@@ -10,8 +10,8 @@ android {
 
         // versionCode 71110     // original andoid 2.3 api 9 version
         // versionName "7.11.10" // original andoid 2.3 api 9 version
-        versionCode 141221       // beta 36: swapped swipe sides, delete->archive, long-press no longer fires mid-swipe
-        versionName "14.12.00"   // migrated android 4.0 api 14 version
+        versionCode 10000            // 1.0.0: first stable under the app.tvmovie.tracker package
+        versionName "1.0.0"          // fresh numbering for the renamed app
 
         vectorDrawables.useSupportLibrary = true
     }
@@ -45,9 +45,8 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 
-            // to allow 2 different app installs release is seperate from debug
-            applicationIdSuffix ".k3b" //  ".debug"
-            versionNameSuffix "-DEBUG"
+            // No applicationId/versionName suffixes: the debug build IS the
+            // distributed build and must carry the clean package and version.
 
             // Use the permanent beta key when available so every CI build
             // carries the same signature and installs over previous betas.
@@ -56,7 +55,7 @@ android {
             }
         }
     }
-    namespace 'nl.asymmetrics.droidshows'
+    namespace 'app.tvmovie.tracker'
     lint {
         abortOnError false
     }

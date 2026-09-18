@@ -20,7 +20,7 @@
 		</com.google.android.material.appbar.AppBarLayout>
 		<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/top_progress" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"/>
 		<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
-			<nl.asymmetrics.droidshows.ui.BounceListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
+			<app.tvmovie.tracker.ui.BounceListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
 			<LinearLayout android:id="@+id/android:empty" android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content" android:gravity="center_horizontal">
 				<TextView android:id="@+id/empty_text" android:layout_width="fill_parent" android:layout_height="wrap_content" android:padding="9dp" android:text="@string/layout_main_no_items"/>
 				<Button android:id="@+id/add_show" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/menu_context_add_serie" android:onClick="searchForShow"/>
