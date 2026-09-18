@@ -518,10 +518,10 @@ public class DiscoverActivity extends AppCompatActivity {
 		if (poster == null || poster.isEmpty()) return;
 		try {
 			URL url = new URL(poster);
-			File f = new File(getFilesDir().getAbsolutePath() + "/thumbs" + url.getFile());
+			File f = Utils.posterFile(this, url);
 			if (!f.exists()) {
 				f.getParentFile().mkdirs();
-				nl.asymmetrics.droidshows.utils.Utils.downloadToFile(url, f);
+				nl.asymmetrics.droidshows.utils.Utils.downloadPosterThumb(this, url, f);
 			}
 			s.setPosterInCache("true");
 			s.setPosterThumb(f.getAbsolutePath());
@@ -548,10 +548,10 @@ public class DiscoverActivity extends AppCompatActivity {
 				Bitmap bmp = null;
 				try {
 					URL u = new URL(url);
-					File f = new File(getFilesDir().getAbsolutePath() + "/thumbs" + u.getFile());
+					File f = Utils.posterFile(DiscoverActivity.this, u);
 					if (!f.exists()) {
 						f.getParentFile().mkdirs();
-						nl.asymmetrics.droidshows.utils.Utils.downloadToFile(u, f);
+						nl.asymmetrics.droidshows.utils.Utils.downloadPosterThumb(DiscoverActivity.this, u, f);
 					}
 					bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
 				} catch (Exception ignored) {}

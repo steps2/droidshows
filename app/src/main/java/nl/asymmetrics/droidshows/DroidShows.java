@@ -270,6 +270,23 @@ public class DroidShows extends AppCompatActivity
 		setContentView(R.layout.main);
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
+		// One-time move of poster files from the old files-dir location to the
+		// cache dir (plus the matching DB path rewrite); then prune the poster
+		// cache to its size cap. Runs off the UI thread: file I/O + DB write.
+		new Thread(new Runnable() {
+			public void run() {
+				try {
+					File oldDir = new File(getApplicationContext().getFilesDir(), "thumbs");
+					if (oldDir.exists()) {
+						Utils.migratePosterCache(getApplicationContext());
+						db.execQuery("UPDATE series SET posterThumb = REPLACE(posterThumb, '/files/thumbs', '/cache/thumbs')");
+					}
+					Utils.prunePosterCache(getApplicationContext());
+				} catch (Exception e) {
+					Log.e(SQLiteStore.TAG, "poster cache migration failed", e);
+				}
+			}
+		}).start();
 		if (savedInstanceState != null) {
 			showArchive = savedInstanceState.getInt("showArchive");
 			mediaType = savedInstanceState.getInt("mediaType", 0);
@@ -968,6 +985,14 @@ public class DroidShows extends AppCompatActivity
 				m_AlertDlg.dismiss();
 				safRestore();
 				break;
+			case R.id.clear_poster_cache:
+				new Thread(new Runnable() {
+					public void run() {
+						Utils.clearPosterCache(getApplicationContext());
+						toastOnUi(R.string.poster_cache_cleared);
+					}
+				}).start();
+				break;
 			case R.id.auto_backup:
 				autoBackup ^= true;
 				break;
@@ -1314,10 +1339,7 @@ public class DroidShows extends AppCompatActivity
 							migrationFailed = true;
 					}
 					// posters cached for another install are stale
-					File thumbs[] = new File(getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs/banners/posters").listFiles();
-					if (thumbs != null)
-						for (File thumb : thumbs)
-							thumb.delete();
+					Utils.clearPosterCache(getApplicationContext());
 				} catch (Exception e) {
 					Log.e(SQLiteStore.TAG, "Error restoring backup", e);
 					try { db.openDataBase(); } catch (Exception e2) {}
@@ -1888,7 +1910,7 @@ public class DroidShows extends AppCompatActivity
 				posterURL = new URL(poster);
 				if (posterThumbPath != null)
 					new File(posterThumbPath).delete();
-				posterThumbPath = getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs"+ posterURL.getFile().toString();
+				posterThumbPath = Utils.posterFile(getApplicationContext(), posterURL).getAbsolutePath();
 				} catch (MalformedURLException e) {
 					Log.e(SQLiteStore.TAG, sToUpdate.getSerieName() +" doesn't have a poster URL");
 					e.printStackTrace();
@@ -1897,7 +1919,7 @@ public class DroidShows extends AppCompatActivity
 				File posterThumbFile = null;
 				try {
 					posterThumbFile = new File(posterThumbPath);
-					Utils.downloadToFile(posterURL, posterThumbFile);
+					Utils.downloadPosterThumb(getApplicationContext(), posterURL, posterThumbFile);
 				} catch (IOException e) {
 					Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
 					e.printStackTrace();

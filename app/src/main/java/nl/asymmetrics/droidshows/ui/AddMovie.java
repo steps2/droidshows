@@ -321,7 +321,7 @@ public class AddMovie extends AppCompatActivity
 			String posterThumbPath = null;
 			try {
 				posterURL = new URL(poster);
-				posterThumbPath = getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs"+ posterURL.getFile().toString();
+				posterThumbPath = Utils.posterFile(getApplicationContext(), posterURL).getAbsolutePath();
 			} catch (MalformedURLException e) {
 				Log.e(SQLiteStore.TAG, mToAdd.getSerieName() +" doesn't have a poster URL");
 				e.printStackTrace();
@@ -331,7 +331,7 @@ public class AddMovie extends AppCompatActivity
 			try {
 				// Bounded connect/read timeouts: a stalled image host must not
 				// hang this download (and the task queue) forever.
-				Utils.downloadToFile(posterURL, posterThumbFile);
+				Utils.downloadPosterThumb(getApplicationContext(), posterURL, posterThumbFile);
 			} catch (IOException e) {
 				Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
 				e.printStackTrace();
