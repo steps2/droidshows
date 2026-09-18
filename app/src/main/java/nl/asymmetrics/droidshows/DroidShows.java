@@ -121,6 +121,8 @@ import nl.asymmetrics.droidshows.ui.HamburgerDrawable;
 
 public class DroidShows extends AppCompatActivity
 {
+	private static final String TAG = "DroidShows";
+
 	// Load a vector menu icon through AppCompatResources so vectors render on
 	// the whole minSdk-14 range.
 	private android.graphics.drawable.Drawable menuIcon(int resId) {
@@ -802,11 +804,10 @@ public class DroidShows extends AppCompatActivity
 				toggleLogMode();
 				break;
 			case EXIT_MENU_ITEM :
-				onPause();	// save options
-				onStop();	// back up database
+				saveOptions();		// persist preferences
+				maybeAutoBackup();	// back up database
 				db.close();
 				this.finish();
-				System.gc();
 				System.exit(0);	// kill process
 		}
 		return super.onOptionsItemSelected(item);
@@ -1069,16 +1070,18 @@ public class DroidShows extends AppCompatActivity
 			File previous0 = new File(backupFolder, "TVMovie Tracker.db0");
 			if (previous0.exists()) {
 				File previous1 = new File(backupFolder, "TVMovie Tracker.db1");
-				if (previous1.exists())
-					previous1.delete();
-				previous0.renameTo(previous1);
+				if (previous1.exists() && !previous1.delete())
+					Log.w(TAG, "Could not delete old backup " + previous1.getAbsolutePath());
+				if (!previous0.renameTo(previous1))
+					Log.w(TAG, "Could not rotate backup " + previous0.getAbsolutePath());
 			}
-			destination.renameTo(previous0);
-		} else
-			destination.delete();
+			if (!destination.renameTo(previous0))
+				Log.w(TAG, "Could not rotate backup " + destination.getAbsolutePath());
+		} else if (destination.exists() && !destination.delete())
+			Log.w(TAG, "Could not delete old backup " + destination.getAbsolutePath());
 		File folder = new File(backupFolder);
-		if (!folder.isDirectory())
-			folder.mkdir();
+		if (!folder.isDirectory() && !folder.mkdir())
+			Log.w(TAG, "Could not create backup folder " + backupFolder);
 		return destination;
 	}
 
@@ -2110,6 +2113,8 @@ public class DroidShows extends AppCompatActivity
 		}
 	}
 
+	private static final AtomicInteger notifyIdSeq = new AtomicInteger(1);
+
 	@SuppressLint("NewApi")
 	private void errorNotify(String error) {
 		ensureNotifyChannel();
@@ -2123,7 +2128,8 @@ public class DroidShows extends AppCompatActivity
 				.setContentTitle(getString(R.string.messages_thetvdb_con_error))
 				.setContentText(error)
 				.setAutoCancel(true);
-		androidx.core.app.NotificationManagerCompat.from(this).notify(0, builder.build());
+		androidx.core.app.NotificationManagerCompat.from(this)
+			.notify(notifyIdSeq.getAndIncrement(), builder.build());
 	}
 
 	private void getSeries() {
@@ -2228,6 +2234,12 @@ public class DroidShows extends AppCompatActivity
 	@Override
 	public void onPause() {
 		super.onPause();
+		saveOptions();
+	}
+
+	/** Persist preferences. Called from onPause() and from the Exit menu item;
+	 * never invoke the lifecycle method itself to get here. */
+	private void saveOptions() {
 		SharedPreferences.Editor ed = sharedPrefs.edit();
 		ed.putBoolean(AUTO_BACKUP_PREF_NAME, autoBackup);
 		ed.putString(BACKUP_FOLDER_PREF_NAME, backupFolder);
@@ -2252,11 +2264,28 @@ public class DroidShows extends AppCompatActivity
 
 	@Override
 	protected void onStop() {
+		maybeAutoBackup();
+		super.onStop();
+	}
+
+	/** Trigger the auto-backup when the app goes quiet. Called from onStop()
+	 * and from the Exit menu item; never invoke the lifecycle method itself. */
+	private void maybeAutoBackup() {
 		boolean updating = (updateShowTh != null && updateShowTh.isAlive())
 			|| (updateAllShowsTh != null && updateAllShowsTh.isAlive());
 		if (autoBackup && !updating && asyncInfo.getStatus() != AsyncTask.Status.RUNNING)	// not updating
 			backup(true, backupFolder);
-		super.onStop();
+	}
+
+	@Override
+	protected void onDestroy() {
+		// A dialog held in a field survives rotation and leaks its old
+		// activity's window: dismiss it before the activity is torn down.
+		if (m_AlertDlg != null) {
+			try { m_AlertDlg.dismiss(); } catch (Exception e) {}
+			m_AlertDlg = null;
+		}
+		super.onDestroy();
 	}
 
 	@Override
@@ -2645,7 +2674,7 @@ public class DroidShows extends AppCompatActivity
 		private void setTextColMargin(ViewHolder holder, boolean isMovie) {
 			if (holder.textCol != null) {
 				ViewGroup.MarginLayoutParams tlp = (ViewGroup.MarginLayoutParams) holder.textCol.getLayoutParams();
-				tlp.rightMargin = isMovie ? padding * 70 / 6 : padding * 22 / 6;
+				tlp.setMarginEnd(isMovie ? padding * 70 / 6 : padding * 22 / 6);
 			}
 		}
 

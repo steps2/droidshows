@@ -17,6 +17,8 @@ import nl.asymmetrics.droidshows.thetvdb.model.Episode;
 import nl.asymmetrics.droidshows.thetvdb.model.Serie;
 import android.util.Log;
 
+import nl.asymmetrics.droidshows.BuildConfig;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -30,7 +32,7 @@ public class TMDB {
 	private static final String TAG = "TMDB";
 	private static final String BASE = "https://api.themoviedb.org/3";
 	private static final String IMAGE_BASE = "https://image.tmdb.org/t/p/";
-	private static final String USER_AGENT = "DroidShows/14.12";
+	private static final String USER_AGENT = "TVMovieTracker/" + BuildConfig.VERSION_NAME;
 
 	/** Rate limiting: TMDB allows ~40 requests per 10 seconds per key.
 	 *  Keep a minimum gap between requests (~3/sec max) and back off on

@@ -14,6 +14,8 @@ import org.json.JSONObject;
 
 import android.util.Log;
 
+import nl.asymmetrics.droidshows.BuildConfig;
+
 /**
  * Static HTTP helpers for talking to the JSON-based provider APIs
  * (TVMaze: https://api.tvmaze.com - free, no auth, rate limit ~20 req/10s).
@@ -26,7 +28,7 @@ import android.util.Log;
 public class JsonFetcher {
 
 	private static final String TAG = "JsonFetcher";
-	private static final String USER_AGENT = "DroidShows/14.12";
+	private static final String USER_AGENT = "TVMovieTracker/" + BuildConfig.VERSION_NAME;
 	private static final int CONNECT_TIMEOUT_MS = 10000;
 	private static final int READ_TIMEOUT_MS = 10000;
 

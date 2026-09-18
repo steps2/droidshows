@@ -253,7 +253,6 @@ public class DiscoverActivity extends AppCompatActivity {
 					if (want == 0) tvMore = more; else movieMore = more;
 					refreshList();
 					showTop(false);
-					loadingMore = false;
 				}});
 			}
 		}).start();

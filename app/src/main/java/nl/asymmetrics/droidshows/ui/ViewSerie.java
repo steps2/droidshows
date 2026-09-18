@@ -338,4 +338,21 @@ public class ViewSerie extends Activity
 			overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		}
 	}
+
+	@Override
+	protected void onDestroy() {
+		// A WebView holds onto its renderer process unless destroyed: detach
+		// and destroy it here so leaving the details screen frees the memory.
+		if (posterView != null) {
+			try {
+				((android.view.ViewGroup) posterView.getParent()).removeView(posterView);
+			} catch (Exception e) {}
+			posterView.stopLoading();
+			posterView.loadUrl("about:blank");
+			posterView.setWebViewClient(null);
+			posterView.destroy();
+			posterView = null;
+		}
+		super.onDestroy();
+	}
 }

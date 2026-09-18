@@ -8,14 +8,10 @@ import android.widget.ListView;
 
 public class BounceListView extends ListView {
 	private static final int MAX_OVERSCROLL_DISTANCE = 70;
-	private static final int MIN_OVERSCROLL_DISTANCE = 60;
 	private int maxOverScrollDistance;
-	private int minOverScrollDistance;
 	private Context context;
 	private float startY;
 	private boolean allowOverScroll = false;
-	private boolean abortUpdate = true;
-	public boolean updating = false;
 	public boolean gettingNextLogged = false;
 
 	public BounceListView(Context context, AttributeSet attrs) {
@@ -23,14 +19,12 @@ public class BounceListView extends ListView {
 		this.context = context;
 		final float density = context.getResources().getDisplayMetrics().density;
 		maxOverScrollDistance = (int) density * MAX_OVERSCROLL_DISTANCE;
-		minOverScrollDistance = (int) density * MIN_OVERSCROLL_DISTANCE;
 	}
 
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
 		switch(event.getAction()) {
 			case MotionEvent.ACTION_DOWN:
-				abortUpdate = true;
 				startY = event.getY();
 				break;
 			case MotionEvent.ACTION_MOVE:
@@ -41,40 +35,25 @@ public class BounceListView extends ListView {
 				break;
 			case MotionEvent.ACTION_UP:
 				allowOverScroll = false;
-				abortUpdate = true;
 		}
 		return super.onTouchEvent(event);
 	}
-	
+
 	@Override
 	protected void onOverScrolled(int scrollX, int scrollY, boolean clampedX, boolean clampedY) {
+		// Log-mode pagination only. The old overscroll-to-sync gesture is gone:
+		// pull-to-refresh was removed, sync now lives in the + popup menu.
 		if (DroidShows.logMode && !gettingNextLogged && allowOverScroll) {
 			gettingNextLogged = true;
 			((DroidShows)context).getNextLogged();
-		} else {
-			if (!updating && -scrollY > minOverScrollDistance) {
-				abortUpdate = false;
-				updating = true;
-				this.postDelayed(startUpdate, 500);
-			}
 		}
 		super.onOverScrolled(scrollX, scrollY, clampedX, clampedY);
 	}
 
 	@Override
 	protected boolean overScrollBy(int deltaX, int deltaY, int scrollX, int scrollY, int scrollRangeX, int scrollRangeY, int maxOverScrollX, int maxOverScrollY, boolean isTouchEvent) {
-		if (-scrollY <= minOverScrollDistance)
-			abortUpdate = true;
 		if (allowOverScroll)
 			maxOverScrollY = maxOverScrollDistance;
 		return super.overScrollBy(deltaX, deltaY, scrollX, scrollY, scrollRangeX, scrollRangeY, maxOverScrollX, maxOverScrollY, isTouchEvent);
 	}
-
-	private Runnable startUpdate = new Runnable() {
-		public void run() {
-			if (!abortUpdate)
-				((DroidShows)context).updateAllSeries(DroidShows.showArchive);
-			updating = false;
-		}
-	};
 }
