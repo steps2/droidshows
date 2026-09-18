@@ -61,17 +61,26 @@ public class TMDB {
 	 * The week's trending movies. Returns null on connection/auth failure.
 	 */
 	public List<Serie> getTrendingMovies() {
-		String url = BASE + "/trending/movie/week?api_key=" + apiKey + "&include_adult=false";
+		return getTrendingMovies(1);
+	}
+
+	/** Paged trending movies; totalPages is set after each call. */
+	public List<Serie> getTrendingMovies(int page) {
+		String url = BASE + "/trending/movie/week?api_key=" + apiKey + "&include_adult=false&page=" + page;
 		String json = fetchJson(url);
 		if (json == null) return null;
 		try {
 			JSONObject root = new JSONObject(json);
+			totalPages = Math.max(1, root.optInt("total_pages", 1));
 			return parseMovieList(root.optJSONArray("results"));
 		} catch (Exception e) {
 			Log.e(TAG, "getTrendingMovies failed: " + e.getMessage());
 			return null;
 		}
 	}
+
+	/** Total pages reported by the last getTrendingMovies/getTVList call. */
+	public int totalPages = 1;
 
 	private List<Serie> parseMovieList(JSONArray results) {
 		List<Serie> movies = new ArrayList<Serie>();
@@ -101,11 +110,17 @@ public class TMDB {
 	 * to TVMaze via searchShows(name). Returns null on failure.
 	 */
 	public List<Serie> getTVList(String category) {
-		String url = BASE + "/tv/" + category + "?api_key=" + apiKey + "&include_adult=false&page=1";
+		return getTVList(category, 1);
+	}
+
+	/** Paged TV list; totalPages is set after each call. */
+	public List<Serie> getTVList(String category, int page) {
+		String url = BASE + "/tv/" + category + "?api_key=" + apiKey + "&include_adult=false&page=" + page;
 		String json = fetchJson(url);
 		if (json == null) return null;
 		try {
 			JSONObject root = new JSONObject(json);
+			totalPages = Math.max(1, root.optInt("total_pages", 1));
 			JSONArray results = root.optJSONArray("results");
 			List<Serie> tv = new ArrayList<Serie>();
 			if (results != null) {

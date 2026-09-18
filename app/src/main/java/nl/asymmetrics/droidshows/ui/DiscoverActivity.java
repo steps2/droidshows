@@ -7,6 +7,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
@@ -25,8 +26,11 @@ import com.google.android.material.tabs.TabLayout;
 import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import nl.asymmetrics.droidshows.DroidShows;
@@ -38,17 +42,32 @@ import nl.asymmetrics.droidshows.provider.TVMaze;
 import nl.asymmetrics.droidshows.thetvdb.model.Serie;
 import nl.asymmetrics.droidshows.utils.SQLiteStore;
 
-/** Discover: shows airing today (TVMaze) and the week's trending movies (TMDB).
- *  Tap the check to add an item to the library; long-press for the Add menu. */
+/** Discover: an endless list of shows (popular / top-rated / on-the-air mix)
+ *  and trending movies. TV rows appear instantly from TMDB; their TVMaze ids
+ *  resolve in the background so the check marks catch up. Tap the check to
+ *  add an item to the library; long-press for the Add menu. */
 public class DiscoverActivity extends AppCompatActivity {
 
 	private ListView listView;
+	private TextView emptyView;
 	private LinearProgressIndicator topProgress;
 	private DiscoverAdapter adapter;
 	private final List<Serie> shows = new ArrayList<Serie>();
 	private final List<Serie> movies = new ArrayList<Serie>();
 	private final Set<String> inLibrary = new HashSet<String>();
+	/** tmdbId -> tvmazeId, filled in by the background resolver */
+	private final Map<String, String> tvResolved =
+		Collections.synchronizedMap(new HashMap<String, String>());
+	private final Set<String> seenTvTmdb = new HashSet<String>();
+	private final List<Serie> resolveQueue = new ArrayList<Serie>();
+	private boolean resolverRunning = false;
 	private int tab = 0;
+	private int moviePage = 0;
+	private int tvPage = 0;
+	private boolean movieMore = true;
+	private boolean tvMore = true;
+	private boolean loadingMore = false;
+	private String movieProblem = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -74,9 +93,18 @@ public class DiscoverActivity extends AppCompatActivity {
 
 		topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
 		listView = (ListView) findViewById(android.R.id.list);
-		listView.setEmptyView(findViewById(android.R.id.empty));
+		emptyView = (TextView) findViewById(android.R.id.empty);
+		listView.setEmptyView(emptyView);
 		adapter = new DiscoverAdapter();
 		listView.setAdapter(adapter);
+		listView.setOnScrollListener(new AbsListView.OnScrollListener() {
+			public void onScrollStateChanged(AbsListView view, int scrollState) {}
+			public void onScroll(AbsListView view, int firstVisible, int visibleCount, int totalCount) {
+				if (loadingMore || totalCount == 0) return;
+				boolean more = tab == 0 ? tvMore : movieMore;
+				if (more && firstVisible + visibleCount >= totalCount - 4) loadMore();
+			}
+		});
 		listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
 			public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
 				final Serie item = adapter.getItem(position);
@@ -108,94 +136,165 @@ public class DiscoverActivity extends AppCompatActivity {
 		}});
 	}
 
-	/** (Re)load the current tab's feed on a background thread. */
+	/** First load of the current tab (skipped when the tab already has pages). */
 	private void loadTab() {
+		if ((tab == 0 && tvPage > 0) || (tab == 1 && moviePage > 0)) {
+			refreshList();
+			return;
+		}
+		emptyView.setText(R.string.discover_loading);
 		showTop(true);
 		final int want = tab;
 		new Thread(new Runnable() {
 			public void run() {
 				refreshLibraryIds();
-				final List<Serie> data;
-				String problem = null;
+				final boolean more;
 				if (want == 0) {
-					data = loadMixedShows();
+					more = loadTvPage(1);
 				} else {
-					String key = getSharedPreferences("DroidShowsPref", 0)
-						.getString(DroidShows.TMDB_API_KEY_NAME, "");
-					if (key == null || key.isEmpty()) {
-						data = null;
-						problem = "nokey";
-					} else {
-						data = new TMDB(key).getTrendingMovies();
-					}
+					more = loadMoviePage(1);
 				}
-				final List<Serie> result = data;
-				final String err = problem;
+				final String problem = movieProblem;
 				runOnUiThread(new Runnable() { public void run() {
 					if (want != tab) return;
-					List<Serie> target = want == 0 ? shows : movies;
-					target.clear();
-					if (result != null) target.addAll(result);
+					if (want == 0) tvMore = more; else movieMore = more;
+					emptyView.setText(R.string.discover_empty);
 					refreshList();
 					showTop(false);
-					if ("nokey".equals(err))
+					if ("nokey".equals(problem))
 						Toast.makeText(DiscoverActivity.this, R.string.discover_no_key, Toast.LENGTH_LONG).show();
-					else if (result == null)
+					else if ((want == 0 ? shows : movies).isEmpty())
 						Toast.makeText(DiscoverActivity.this, R.string.messages_thetvdb_con_error, Toast.LENGTH_LONG).show();
 				}});
 			}
 		}).start();
 	}
 
-	/** TV Discover feed: a mix of popular, top-rated and currently-airing shows
-	 *  (via TMDB), each mapped to TVMaze so it can be added like any show.
-	 *  Without a TMDB key it falls back to the TVMaze airing-today schedule. */
-	private List<Serie> loadMixedShows() {
-		String key = getSharedPreferences("DroidShowsPref", 0)
-			.getString(DroidShows.TMDB_API_KEY_NAME, "");
-		TVMaze tvMaze = new TVMaze();
-		if (key == null || key.isEmpty()) {
-			try { return tvMaze.getScheduleShows(); }
-			catch (JsonFetcher.RateLimitException e) { return null; }
-		}
-		TMDB tmdb = new TMDB(key);
-		List<Serie> popular = tmdb.getTVList("popular");
-		List<Serie> topRated = tmdb.getTVList("top_rated");
-		List<Serie> onAir = tmdb.getTVList("on_the_air");
-		if (popular == null && topRated == null && onAir == null) return null;
-		// round-robin interleave so the three sources are genuinely mixed
-		List<Serie> candidates = new ArrayList<Serie>();
-		Set<String> seenTmdb = new HashSet<String>();
-		for (int i = 0; i < 8; i++) {
-			addCandidate(candidates, seenTmdb, popular, i);
-			addCandidate(candidates, seenTmdb, topRated, i);
-			addCandidate(candidates, seenTmdb, onAir, i);
-		}
-		List<Serie> mixed = new ArrayList<Serie>();
-		Set<String> seenTvmaze = new HashSet<String>();
-		for (Serie c : candidates) {
-			if (mixed.size() >= 20) break;
-			try {
-				List<Serie> hits = tvMaze.searchShows(c.getSerieName());
-				if (hits == null || hits.isEmpty()) continue;
-				Serie show = hits.get(0);
-				if (show.getTvmazeId() == null || !seenTvmaze.add(show.getTvmazeId())) continue;
-				mixed.add(show);
-			} catch (JsonFetcher.RateLimitException e) {
-				break; // rate-limited: show what we have so far
+	/** Endless scroll: append the next page of the current tab. */
+	private void loadMore() {
+		if (loadingMore) return;
+		loadingMore = true;
+		showTop(true);
+		final int want = tab;
+		new Thread(new Runnable() {
+			public void run() {
+				final boolean more = (want == 0) ? loadTvPage(tvPage + 1) : loadMoviePage(moviePage + 1);
+				runOnUiThread(new Runnable() { public void run() {
+					if (want == 0) tvMore = more; else movieMore = more;
+					refreshList();
+					showTop(false);
+					loadingMore = false;
+				}});
 			}
-		}
-		return mixed;
+		}).start();
 	}
 
-	private void addCandidate(List<Serie> out, Set<String> seen, List<Serie> src, int i) {
+	/** TV page: TMDB mix (popular / top-rated / on-the-air) shown instantly;
+	 *  TVMaze ids resolve in the background. Returns true if more pages exist. */
+	private boolean loadTvPage(int page) {
+		String key = getSharedPreferences("DroidShowsPref", 0)
+			.getString(DroidShows.TMDB_API_KEY_NAME, "");
+		if (key == null || key.isEmpty()) {
+			if (page == 1) {
+				try {
+					List<Serie> sched = new TVMaze().getScheduleShows();
+					if (sched != null && !sched.isEmpty()) { shows.addAll(sched); tvPage = 1; }
+				} catch (JsonFetcher.RateLimitException e) { /* leave empty */ }
+			}
+			return false;
+		}
+		TMDB tmdb = new TMDB(key);
+		List<Serie> popular = tmdb.getTVList("popular", page);
+		int p1 = tmdb.totalPages;
+		List<Serie> topRated = tmdb.getTVList("top_rated", page);
+		int p2 = tmdb.totalPages;
+		List<Serie> onAir = tmdb.getTVList("on_the_air", page);
+		int p3 = tmdb.totalPages;
+		List<Serie> fresh = new ArrayList<Serie>();
+		for (int i = 0; i < 10; i++) {
+			addCandidate(fresh, popular, i);
+			addCandidate(fresh, topRated, i);
+			addCandidate(fresh, onAir, i);
+		}
+		if (!fresh.isEmpty()) {
+			shows.addAll(fresh);
+			tvPage = page;
+			enqueueResolve(fresh);
+		}
+		return page < p1 || page < p2 || page < p3;
+	}
+
+	private void addCandidate(List<Serie> out, List<Serie> src, int i) {
 		if (src == null || i >= src.size()) return;
 		Serie s = src.get(i);
-		if (s.getId() == null || !seen.add(s.getId())) return;
+		if (s.getId() == null || !seenTvTmdb.add(s.getId())) return;
 		out.add(s);
 	}
 
-	private void refreshLibraryIds() {		inLibrary.clear();
+	/** Movie page: TMDB trending. Returns true if more pages exist. */
+	private boolean loadMoviePage(int page) {
+		movieProblem = null;
+		String key = getSharedPreferences("DroidShowsPref", 0)
+			.getString(DroidShows.TMDB_API_KEY_NAME, "");
+		if (key == null || key.isEmpty()) {
+			movieProblem = "nokey";
+			return false;
+		}
+		TMDB tmdb = new TMDB(key);
+		List<Serie> data = tmdb.getTrendingMovies(page);
+		if (data == null) return page > 1 && movieMore;
+		if (!data.isEmpty()) {
+			movies.addAll(data);
+			moviePage = page;
+		}
+		return page < tmdb.totalPages;
+	}
+
+	/** Background TVMaze id resolution so check marks catch up after the
+	 *  fast TMDB rows are already on screen. */
+	private void enqueueResolve(List<Serie> rows) {
+		synchronized (resolveQueue) {
+			for (Serie s : rows) {
+				if (tvResolved.containsKey(s.getId()) || resolveQueue.contains(s)) continue;
+				resolveQueue.add(s);
+			}
+			if (!resolverRunning) {
+				resolverRunning = true;
+				new Thread(resolveRunnable).start();
+			}
+		}
+	}
+
+	private final Runnable resolveRunnable = new Runnable() {
+		public void run() {
+			TVMaze tvMaze = new TVMaze();
+			for (;;) {
+				Serie s;
+				synchronized (resolveQueue) {
+					if (resolveQueue.isEmpty()) {
+						resolverRunning = false;
+						return;
+					}
+					s = resolveQueue.remove(0);
+				}
+				try {
+					List<Serie> hits = tvMaze.searchShows(s.getSerieName());
+					if (hits != null && !hits.isEmpty() && hits.get(0).getTvmazeId() != null) {
+						tvResolved.put(s.getId(), hits.get(0).getTvmazeId());
+						runOnUiThread(new Runnable() { public void run() {
+							adapter.notifyDataSetChanged();
+						}});
+					}
+				} catch (JsonFetcher.RateLimitException e) {
+					synchronized (resolveQueue) { resolveQueue.add(0, s); }
+					try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
+				} catch (Exception ignored) {}
+			}
+		}
+	};
+
+	private void refreshLibraryIds() {
+		inLibrary.clear();
 		try {
 			android.database.Cursor c = DroidShows.db.Query("SELECT id, tvmazeId, mediaType FROM series");
 			if (c != null) {
@@ -216,13 +315,18 @@ public class DiscoverActivity extends AppCompatActivity {
 		}
 	}
 
-	private static String keyOf(Serie s) {
-		return (s.getMediaType() == 1 ? "m:" : "t:") + s.getId();
+	private String libKeyOf(Serie s) {
+		if (s.getMediaType() == 1) return "m:" + s.getId();
+		String resolved = tvResolved.get(s.getId());
+		if (resolved != null) return "t:" + resolved;
+		String tid = s.getTvmazeId();
+		if (tid != null && !tid.isEmpty()) return "t:" + tid;
+		return "t:pending:" + s.getId();
 	}
 
 	/** Add the item to the library (full details + poster), like AddSerie/AddMovie do. */
 	private void addItem(final Serie item) {
-		if (inLibrary.contains(keyOf(item))) {
+		if (inLibrary.contains(libKeyOf(item))) {
 			Toast.makeText(this, R.string.discover_already, Toast.LENGTH_SHORT).show();
 			return;
 		}
@@ -253,21 +357,25 @@ public class DiscoverActivity extends AppCompatActivity {
 							ok = true;
 						}
 					} else {
-						full = null;
-						try {
-							full = new TVMaze().getShow(item.getTvmazeId());
-						} catch (JsonFetcher.RateLimitException e) {
-							try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-							full = new TVMaze().getShow(item.getTvmazeId());
-						}
-						if (full == null) {
+						String tvmazeId = tvResolved.get(item.getId());
+						if ((tvmazeId == null || tvmazeId.isEmpty())
+								&& item.getTvmazeId() != null && !item.getTvmazeId().isEmpty())
+							tvmazeId = item.getTvmazeId();
+						if (tvmazeId == null || tvmazeId.isEmpty())
+							tvmazeId = resolveOnDemand(item);
+						if (tvmazeId == null || tvmazeId.isEmpty()) {
 							msg = getString(R.string.messages_thetvdb_con_error);
 						} else {
-							cachePoster(full);
-							full.setPassiveStatus(DroidShows.showArchive == 1 ? 1 : 0);
-							full.saveToDB(DroidShows.db);
-							msg = String.format(getString(R.string.messages_series_success), full.getSerieName());
-							ok = true;
+							full = getShowWithBackoff(tvmazeId);
+							if (full == null) {
+								msg = getString(R.string.messages_thetvdb_con_error);
+							} else {
+								cachePoster(full);
+								full.setPassiveStatus(DroidShows.showArchive == 1 ? 1 : 0);
+								full.saveToDB(DroidShows.db);
+								msg = String.format(getString(R.string.messages_series_success), full.getSerieName());
+								ok = true;
+							}
 						}
 					}
 				} catch (Exception e) {
@@ -279,8 +387,38 @@ public class DiscoverActivity extends AppCompatActivity {
 		}).start();
 	}
 
+	/** Resolve a show's TVMaze id right now (user tapped faster than the background resolver). */
+	private String resolveOnDemand(Serie item) {
+		try {
+			List<Serie> hits = new TVMaze().searchShows(item.getSerieName());
+			if (hits != null && !hits.isEmpty() && hits.get(0).getTvmazeId() != null) {
+				tvResolved.put(item.getId(), hits.get(0).getTvmazeId());
+				return hits.get(0).getTvmazeId();
+			}
+		} catch (JsonFetcher.RateLimitException e) {
+			try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+			try {
+				List<Serie> hits = new TVMaze().searchShows(item.getSerieName());
+				if (hits != null && !hits.isEmpty()) return hits.get(0).getTvmazeId();
+			} catch (Exception ignored) {}
+		} catch (Exception ignored) {}
+		return null;
+	}
+
+	private Serie getShowWithBackoff(String tvmazeId) {
+		try {
+			return new TVMaze().getShow(tvmazeId);
+		} catch (JsonFetcher.RateLimitException e) {
+			try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+			try { return new TVMaze().getShow(tvmazeId); }
+			catch (Exception ignored) { return null; }
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
 	private void postAddResult(final String msg, final boolean ok, final Serie item) {
-		if (ok) inLibrary.add(keyOf(item));
+		if (ok) inLibrary.add(libKeyOf(item));
 		runOnUiThread(new Runnable() { public void run() {
 			showTop(false);
 			adapter.notifyDataSetChanged();
@@ -357,13 +495,12 @@ public class DiscoverActivity extends AppCompatActivity {
 				name.setText(o.getSerieName());
 				meta.setText(metaLine(o));
 				loadPosterInto(poster, o);
-				final boolean inLib = inLibrary.contains(keyOf(o));
 				check.setOnCheckedChangeListener(null);
-				check.setChecked(inLib);
+				check.setChecked(inLibrary.contains(libKeyOf(o)));
 				check.setOnClickListener(new View.OnClickListener() {
 					public void onClick(View btn) {
 						CheckBox cb = (CheckBox) btn;
-						if (inLibrary.contains(keyOf(o))) {
+						if (inLibrary.contains(libKeyOf(o))) {
 							cb.setChecked(true);
 							Toast.makeText(DiscoverActivity.this, R.string.discover_already, Toast.LENGTH_SHORT).show();
 						} else {

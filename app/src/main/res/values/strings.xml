@@ -56,6 +56,7 @@
 <string name="discover_poster_desc">Poster</string>
 <string name="discover_no_key">Add your TMDB API key in Settings to discover movies.</string>
 <string name="discover_already">Already in your library</string>
+<string name="discover_loading">Finding great shows and movies for you… hang on, good things take a moment!</string>
 <string name="dialog_use_mirror">Use TheTVDB mirror (try this if updates are too slow)</string>
 <string name="dialog_restore">Restore</string>
 <string name="dialog_restore_now">Restoring a backup will remove all information currently in TVMovie Tracker. Continue?</string>
