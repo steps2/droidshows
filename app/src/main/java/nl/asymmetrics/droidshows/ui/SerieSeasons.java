@@ -71,8 +71,11 @@ public class SerieSeasons extends AppCompatActivity
 		registerForContextMenu(listView);
 		listView.setOnTouchListener(swipeDetect);
 		listView.setSelection(getIntent().getIntExtra("season", 1) -1);
-		if (getIntent().getBooleanExtra("nextEpisode", false))
-			listView.setSelection(db.getNextEpisode(serieId).season -1);
+		if (getIntent().getBooleanExtra("nextEpisode", false)) {
+			SQLiteStore.NextEpisode next = db.getNextEpisode(serieId);
+			if (next != null)
+				listView.setSelection(next.season -1);
+		}
 	}
 
 	/* context menu */
@@ -128,13 +131,15 @@ public class SerieSeasons extends AppCompatActivity
 		seasons = new ArrayList<Season>();
 		try {
 			Cursor cseasons = db.Query("SELECT season FROM serie_seasons WHERE serieId = '"+ serieId +"'  ORDER BY 0+season ASC");	// 0+ to treat VARCHAR as integer an sort properly
-			cseasons.moveToFirst();
-			if (cseasons.getCount() != 0) {
-				do {
-					seasonNumbers.add(cseasons.getInt(0));
-				} while (cseasons.moveToNext());
+			if (cseasons != null) {
+				cseasons.moveToFirst();
+				if (cseasons.getCount() != 0) {
+					do {
+						seasonNumbers.add(cseasons.getInt(0));
+					} while (cseasons.moveToNext());
+				}
+				cseasons.close();
 			}
-			cseasons.close();
 		} catch (Exception e) {
 			Log.e(SQLiteStore.TAG, "Error getting seasons: "+ e.getMessage());
 		}

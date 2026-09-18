@@ -81,8 +81,11 @@ public class SerieEpisodes extends AppCompatActivity {
 		listView.setAdapter(episodesAdapter);
 		listView.setOnTouchListener(swipeDetect);
 		registerForContextMenu(listView);
-		if (getIntent().getBooleanExtra("nextEpisode", false))
-			listView.setSelection(db.getNextEpisode(serieId, seasonNumber).episode -3);
+		if (getIntent().getBooleanExtra("nextEpisode", false)) {
+			SQLiteStore.NextEpisode next = db.getNextEpisode(serieId, seasonNumber);
+			if (next != null)
+				listView.setSelection(next.episode -3);
+		}
 	}
 
 	/* context menu */

@@ -67,8 +67,7 @@ public class ViewEpisode extends Activity
 		String query = "SELECT seasonNumber, episodeNumber, episodeName, overview, rating, firstAired, imdbId, seen FROM episodes "
 			+ "WHERE id = '"+ episodeId +"' AND serieId='"+ serieId +"'";
 		Cursor c = db.Query(query);
-		c.moveToFirst();
-		if (c != null && c.isFirst()) {
+		if (c != null && c.moveToFirst()) {
 			int seasonNumberCol = c.getColumnIndex("seasonNumber");
 			int episodeNumberCol = c.getColumnIndex("episodeNumber");
 			int enameCol = c.getColumnIndex("episodeName");
@@ -79,7 +78,7 @@ public class ViewEpisode extends Activity
 			int seenCol = c.getColumnIndex("seen");
 	
 			String firstAired = c.getString(airedCol);
-			if (!firstAired.equals("") && !firstAired.equals("null")) {
+			if (firstAired != null && !firstAired.equals("") && !firstAired.equals("null")) {
 				try {
 					epDate = SQLiteStore.dateFormat.parse(firstAired);
 					firstAired = SimpleDateFormat.getDateInstance().format(epDate);
@@ -107,10 +106,10 @@ public class ViewEpisode extends Activity
 			episodeNameV.setText(episodeName);
 			
 			TextView ratingV = (TextView) findViewById(R.id.rating);
-			if (!rating.equalsIgnoreCase("null") && !rating.equals("") && !rating.equals("0"))
+			if (rating != null && !rating.equalsIgnoreCase("null") && !rating.equals("") && !rating.equals("0"))
 				ratingV.setText("IMDb: "+ rating +" \u00b7 "
-					+ (imdbId.startsWith("tt") ? getString(R.string.menu_context_view_ep_imdb) : getString(R.string.menu_search)));
-			else if (imdbId.startsWith("tt"))
+					+ (imdbId != null && imdbId.startsWith("tt") ? getString(R.string.menu_context_view_ep_imdb) : getString(R.string.menu_search)));
+			else if (imdbId != null && imdbId.startsWith("tt"))
 				ratingV.setText(getString(R.string.menu_context_view_ep_imdb));
 			else
 				ratingV.setText(getString(R.string.menu_context_search_on) + " IMDb");
@@ -158,7 +157,7 @@ public class ViewEpisode extends Activity
 				firstAiredV.setVisibility(View.VISIBLE);
 			}
 	
-			if (!overview.equalsIgnoreCase("null") && !overview.equals("")) {
+			if (overview != null && !overview.equalsIgnoreCase("null") && !overview.equals("")) {
 				TextView overviewV = (TextView) findViewById(R.id.overview);
 				overviewV.setText(overview);
 				findViewById(R.id.overviewField).setVisibility(View.VISIBLE);
@@ -166,13 +165,12 @@ public class ViewEpisode extends Activity
 			
 			Cursor cwriters = db.Query("SELECT writer FROM writers WHERE episodeId='" + episodeId
 				+"' AND serieId='"+ serieId +"'");
-			cwriters.moveToFirst();
-			if (cwriters != null && cwriters.isFirst()) {
+			if (cwriters != null && cwriters.moveToFirst()) {
 				do {
 					writers.add(cwriters.getString(0));
 				} while (cwriters.moveToNext());
 			}
-			cwriters.close();
+			if (cwriters != null) cwriters.close();
 			if (!writers.isEmpty()) {
 				TextView writersV = (TextView) findViewById(R.id.writer);
 				writersV.setText(writers.toString().replace("]", "").replace("[", ""));
@@ -184,13 +182,12 @@ public class ViewEpisode extends Activity
 			
 			Cursor cdirectors = db.Query("SELECT director FROM directors WHERE episodeId='"+ episodeId
 				+"' AND serieId='"+ serieId +"'");
-			cdirectors.moveToFirst();
-			if (cdirectors != null && cdirectors.isFirst()) {
+			if (cdirectors != null && cdirectors.moveToFirst()) {
 				do {
 					directors.add(cdirectors.getString(0));
 				} while (cdirectors.moveToNext());
 			}
-			cdirectors.close();
+			if (cdirectors != null) cdirectors.close();
 			if (!directors.isEmpty()) {
 				TextView directorsV = (TextView) findViewById(R.id.director);
 				directorsV.setText(directors.toString().replace("]", "").replace("[", ""));
@@ -202,13 +199,12 @@ public class ViewEpisode extends Activity
 	
 			Cursor cgs = db.Query("SELECT guestStar FROM guestStars WHERE episodeId='"+ episodeId
 				+"' AND serieId='"+ serieId +"'");
-			cgs.moveToFirst();
-			if (cgs != null && cgs.isFirst()) {
+			if (cgs != null && cgs.moveToFirst()) {
 				do {
 					guestStars.add(cgs.getString(0));
 				} while (cgs.moveToNext());
 			}
-			cgs.close();
+			if (cgs != null) cgs.close();
 			if (!guestStars.isEmpty()) {
 				TextView guestStarsV = (TextView) findViewById(R.id.guestStars);
 				guestStarsV.setText(guestStars.toString().replace("]", "").replace("[", ""));
@@ -225,6 +221,7 @@ public class ViewEpisode extends Activity
 	}
 	
 	public void calendarEvent(View v) {
+		if (epDate == null) return;  // air date could not be parsed; nothing to add to the calendar
 		Intent intent = new Intent(Intent.ACTION_EDIT);
 		intent.setType("vnd.android.cursor.item/event");
 		intent.putExtra("title", serieName +" "+ seasonNumber +(episodeNumber < 10 ? "x0" : "x") + episodeNumber);
@@ -244,7 +241,7 @@ public class ViewEpisode extends Activity
 	public void IMDbDetails(View v) {
 		if (swipeDetect.value != 0) return;
 		String uri = this.uri;
-		if (imdbId.startsWith("tt")) {
+		if (imdbId != null && imdbId.startsWith("tt")) {
 			uri += "title/"+ imdbId +"/fullcredits/cast";
 		} else {
 			uri += "find?q="+ Uri.encode(serieName.replaceAll(" \\(....\\)", "") +" "+ episodeName);

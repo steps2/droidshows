@@ -48,9 +48,11 @@ public class Update
 			Cursor c = db.Query("SELECT version FROM droidseries");
 			if (c != null && c.moveToFirst()) {
 				version = c.getString(0);
+				c.close();
 				return version;
 			}
-			c.close();
+			if (c != null)
+				c.close();
 		} catch (SQLiteException e) {
 			Log.e(SQLiteStore.TAG, e.getMessage());
 		}

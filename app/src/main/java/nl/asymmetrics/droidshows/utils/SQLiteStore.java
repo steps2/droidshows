@@ -129,8 +129,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Date nextAir = null;
 		Cursor c = Query("SELECT serieName, language, posterThumb, status, passiveStatus, seasonCount, unwatchedAired, unwatched, nextEpisode, nextAir, extResources, mediaType, runtime, firstAired FROM series WHERE id = '" + serieId + "'");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				name = c.getString(c.getColumnIndex("serieName"));
 				language = c.getString(c.getColumnIndex("language"));
 				tmpPoster = c.getString(c.getColumnIndex("posterThumb"));
@@ -159,9 +158,9 @@ public class SQLiteStore extends SQLiteOpenHelper
 			Log.e(TAG, e.getMessage());
 		}
 		if (c != null) c.close();
-		if (!tmpNextEpisode.equals("-1"))
+		if (!"-1".equals(tmpNextEpisode))
 			nextEpisode = tmpNextEpisode;
-		if (!tmpNextAir.isEmpty() && !tmpNextAir.equals("null")) {
+		if (!TextUtils.isEmpty(tmpNextAir) && !tmpNextAir.equals("null")) {
 			try {
 				nextAir = SQLiteStore.dateFormat.parse(tmpNextAir);
 			} catch (ParseException e) {
@@ -213,36 +212,39 @@ public class SQLiteStore extends SQLiteOpenHelper
 						List<String> directors = new ArrayList<String>();
 						Cursor cdirectors = Query("SELECT director FROM directors WHERE serieId='"+ serieId
 							+"' AND episodeId='"+ c.getString(idCol) +"'");
-						cdirectors.moveToFirst();
-						int directorCol = cdirectors.getColumnIndex("director");
-						if (cdirectors != null && cdirectors.isFirst()) {
-							do {
-								directors.add(cdirectors.getString(directorCol));
-							} while (cdirectors.moveToNext());
+						if (cdirectors != null) {
+							int directorCol = cdirectors.getColumnIndex("director");
+							if (cdirectors.moveToFirst()) {
+								do {
+									directors.add(cdirectors.getString(directorCol));
+								} while (cdirectors.moveToNext());
+							}
+							cdirectors.close();
 						}
-						cdirectors.close();
 						List<String> guestStars = new ArrayList<String>();
 						Cursor cguestStars = Query("SELECT guestStar FROM guestStars WHERE serieId='"+ serieId
 							+"' AND episodeId='"+ c.getString(idCol) +"'");
-						cguestStars.moveToFirst();
-						int guestStarCol = cguestStars.getColumnIndex("guestStar");
-						if (cguestStars != null && cguestStars.isFirst()) {
-							do {
-								guestStars.add(cguestStars.getString(guestStarCol));
-							} while (cguestStars.moveToNext());
+						if (cguestStars != null) {
+							int guestStarCol = cguestStars.getColumnIndex("guestStar");
+							if (cguestStars.moveToFirst()) {
+								do {
+									guestStars.add(cguestStars.getString(guestStarCol));
+								} while (cguestStars.moveToNext());
+							}
+							cguestStars.close();
 						}
-						cguestStars.close();
 						List<String> writers = new ArrayList<String>();
 						Cursor cwriters = Query("SELECT writer FROM writers WHERE serieId='"+ serieId
 							+"' AND episodeId='"+ c.getString(idCol) +"'");
-						cwriters.moveToFirst();
-						int writersCol = cwriters.getColumnIndex("writer");
-						if (cwriters != null && cwriters.isFirst()) {
-							do {
-								writers.add(cwriters.getString(writersCol));
-							} while (cwriters.moveToNext());
+						if (cwriters != null) {
+							int writersCol = cwriters.getColumnIndex("writer");
+							if (cwriters.moveToFirst()) {
+								do {
+									writers.add(cwriters.getString(writersCol));
+								} while (cwriters.moveToNext());
+							}
+							cwriters.close();
 						}
-						cwriters.close();
 						eTmp.setDirectors(directors);
 						eTmp.setGuestStars(guestStars);
 						eTmp.setWriters(writers);
@@ -310,8 +312,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 //		Log.d(TAG, "SELECT id FROM series"+ showArchiveString + showNetworksString + mediaTypeString);
 		Cursor cseries = Query("SELECT id FROM series"+ showArchiveString + showNetworksString + mediaTypeString);
 		try {
-			cseries.moveToFirst();
-			if (cseries != null && cseries.isFirst()) {
+			if (cseries != null && cseries.moveToFirst()) {
 				do {
 					series.add(cseries.getString(0));
 				} while (cseries.moveToNext());
@@ -328,10 +329,12 @@ public class SQLiteStore extends SQLiteOpenHelper
 		List<String> networks = new ArrayList<String>();
 		Cursor c = Query("SELECT DISTINCT network FROM series");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				do {
-					networks.add(c.getString(0));
+					String network = c.getString(0);
+					if (network != null) {
+						networks.add(network);
+					}
 				} while (c.moveToNext());
 			}
 		} catch (SQLiteException e) {
@@ -360,8 +363,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 								+ (mediaType < 2 ? " AND series.mediaType="+ mediaType : "")
 								+" ORDER BY episodes.seen DESC, episodes.serieId DESC, episodes.episodeNumber"
 								+" DESC LIMIT 25 OFFSET "+ offset);
-		c.moveToFirst();
-		if (c != null && c.isFirst()) {
+		if (c != null && c.moveToFirst()) {
 			do {
 				serieId = c.getString(c.getColumnIndex("serieId"));
 				episodeId = c.getString(c.getColumnIndex("id"));
@@ -388,7 +390,8 @@ public class SQLiteStore extends SQLiteOpenHelper
 	}
 
 	public EpisodeRow getEpisodeRow(String serieId, int seasonNumber, String episodeId) {
-		return getEpisodeRows(serieId, seasonNumber, episodeId).get(0);
+		List<EpisodeRow> rows = getEpisodeRows(serieId, seasonNumber, episodeId);
+		return rows.isEmpty() ? null : rows.get(0);
 	}
 
 	public List<EpisodeRow> getEpisodeRows(String serieId, int seasonNumber) {
@@ -402,15 +405,14 @@ public class SQLiteStore extends SQLiteOpenHelper
 			+ "serieId='"+ serieId +"' AND seasonNumber="+ seasonNumber
 			+" ORDER BY episodeNumber ASC");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				do {
 					String id = c.getString(c.getColumnIndex("id"));
 					String name = c.getInt(c.getColumnIndex("episodeNumber")) +". "
 							+ c.getString(c.getColumnIndex("episodeName"));
 					String aired = c.getString(c.getColumnIndex("firstAired"));
 					Date airedDate = null;
-					if (!aired.isEmpty() && !aired.equals("null")) {
+					if (!TextUtils.isEmpty(aired) && !aired.equals("null")) {
 							try { 
 								airedDate = dateFormat.parse(aired);
 								aired = SimpleDateFormat.getDateInstance().format(airedDate);
@@ -435,8 +437,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 			+ (max_season != -1 ? " AND (seasonNumber="+ max_season +" OR seasonNumber=0)": "")
 			+" AND seen>0");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				do {
 					episodesSeen.add(new EpisodeSeen(c.getInt(0) +"x"+ c.getInt(1), c.getInt(2)));
 				} while (c.moveToNext());
@@ -455,8 +456,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Cursor c = Query("SELECT id, seen FROM episodes WHERE seen>1");
 		try {
 			db.beginTransaction();
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				do {
 					episodesSeen.add(new EpisodeSeen(c.getString(0), c.getInt(1)));
 				} while (c.moveToNext());
@@ -493,8 +493,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		String imdbId = "";
 		Cursor c = Query("SELECT imdbId, serieName FROM series WHERE id = '" + serieId + "'");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				imdbId = c.getString(0);
 			}
 		} catch (SQLiteException e) {
@@ -509,8 +508,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		String sname = "";
 		Cursor c = Query("SELECT serieName FROM series WHERE id='"+ serieId +"'");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				sname = c.getString(0);
 			}
 		} catch (SQLiteException e) {
@@ -527,8 +525,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 			+"' AND seen>0"
 			+ (DroidShows.includeSpecialsOption ? "" : " AND seasonNumber <> 0"));
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				watched = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -545,8 +542,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 			+"' AND seen=0 AND firstAired < '"+ today +"' AND firstAired <> ''"
 			+ (DroidShows.includeSpecialsOption ? "" : " AND seasonNumber <> 0"));
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				unwatchedAired = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -562,8 +558,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Cursor c = Query("SELECT COUNT(id) FROM episodes WHERE serieId='"+ serieId +"' AND seasonNumber="+ snumber
 				+" AND seen=0 AND firstAired < '"+ today +"' AND firstAired <> ''");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				unwatched = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -579,8 +574,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Cursor c = Query("SELECT COUNT(id) FROM episodes WHERE serieId='"+ serieId
 			+"' AND seen=0 "+ (DroidShows.includeSpecialsOption ? "" : "AND seasonNumber <> 0"));
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				unwatched = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -595,8 +589,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Cursor c = Query("SELECT COUNT(id) FROM episodes WHERE serieId='"+ serieId
 			+"' AND seasonNumber="+ snumber +" AND seen=0");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				unwatched = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -616,8 +609,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Cursor c = null;
 		try {
 			c = Query("SELECT id FROM episodes WHERE serieId='"+ serieId +"' ORDER BY seasonNumber, episodeNumber ASC LIMIT 1");
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				id = c.getString(c.getColumnIndex("id"));
 			}
 		} catch (SQLiteException e) {
@@ -637,8 +629,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 						+ (DroidShows.includeSpecialsOption ? "" : " AND seasonNumber <> 0")
 						+ (noFutureEp ? " AND firstAired <= '"+ today +"' AND firstAired <> ''" : "")
 						+" ORDER BY seasonNumber, episodeNumber ASC LIMIT 1");
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				int index = c.getColumnIndex("id");
 				id = c.getInt(index);
 			}
@@ -654,8 +645,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		Cursor c = Query("SELECT seasonNumber, episodeNumber FROM episodes WHERE serieId='"+ serieId
 				+"' AND seen>=1 ORDER BY seen DESC, seasonNumber DESC, episodeNumber DESC LIMIT 1");
 			try {
-				c.moveToFirst();
-				if (c != null && c.isFirst()) {
+				if (c != null && c.moveToFirst()) {
 					lastSeen[0] = c.getInt(0);
 					lastSeen[1] = c.getInt(1);
 				} else lastSeen = null;
@@ -695,14 +685,13 @@ public class SQLiteStore extends SQLiteOpenHelper
 					+"' AND seasonNumber="+ snumber +" AND seen=0"
 					+" ORDER BY episodeNumber ASC LIMIT 1");
 			}
-			c.moveToFirst();
-			if (c != null && c.isFirst())
+			if (c != null && c.moveToFirst())
 				nextEpisode = new NextEpisode(serieId, c.getInt(0), c.getInt(1), c.getString(2));
 		} catch (SQLiteException e) {
 			Log.e(TAG, e.getMessage());
 		}
 		if (c != null) c.close();
-		if (showNextAiring && (nextEpisode == null || nextEpisode.firstAired.equals("null")))
+		if (showNextAiring && (nextEpisode == null || "null".equals(nextEpisode.firstAired)))
 			return null;
 		if (nextEpisode == null)
 			return new NextEpisode(serieId, -1, -1, "");
@@ -738,8 +727,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		int count = 0;
 		Cursor c = Query("SELECT COUNT(season) FROM serie_seasons WHERE serieId = '"+ serieId +"' AND season <> 0");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				count = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -753,8 +741,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		int count = -1;
 		Cursor c = Query("SELECT COUNT(id) FROM episodes WHERE serieId='"+ serieId +"' AND seasonNumber="+ sNumber);
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				count = c.getInt(0);
 			}
 		} catch (SQLiteException e) {
@@ -795,8 +782,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		String episodeMarked = "";
 		try {
 			c = Query("SELECT seen, seasonNumber, episodeNumber FROM episodes WHERE serieId='"+ serieId+"' AND id='"+ episodeId +"'");
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				long seen = c.getInt(0);
 				int season = c.getInt(1);
 				int episode = c.getInt(2);
@@ -839,8 +825,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		String tvmazeId = "";
 		Cursor c = Query("SELECT tvmazeId FROM series WHERE id='"+ serieId +"'");
 		try {
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
+			if (c != null && c.moveToFirst()) {
 				tvmazeId = c.getString(0);
 			}
 		} catch (SQLiteException e) {
@@ -877,15 +862,14 @@ public class SQLiteStore extends SQLiteOpenHelper
 		if (last_season) {
 			try {
 				cms = Query("SELECT season FROM serie_seasons WHERE serieID='"+ s.getId() +"'");
-				cms.moveToFirst();
-				if (cms != null && cms.isFirst()) {
+				if (cms != null && cms.moveToFirst()) {
 					do {
 						if (max_season < cms.getInt(0)) {
 							max_season = cms.getInt(0);
 						}
 					} while (cms.moveToNext());
 				}
-				cms.close();
+				if (cms != null) cms.close();
 				Log.d(TAG, "Updating only last season "+ max_season +" and specials of "+ tmpSName);
 			} catch (SQLiteException e) {
 				if (cms != null) {
@@ -926,17 +910,18 @@ public class SQLiteStore extends SQLiteOpenHelper
 				String episodes = "";
 				cms = Query("SELECT id FROM episodes WHERE serieId='"+ s.getId() +"'"
 				+" AND (seasonNumber="+ max_season +" OR seasonNumber=0)");
-				cms.moveToFirst();
-				if (cms != null && cms.isFirst()) {
+				if (cms != null && cms.moveToFirst()) {
 					do {
 						episodes += "'"+ cms.getString(0) +"', ";
 					} while (cms.moveToNext());
 				}
-				cms.close();
-				episodes = episodes.substring(0, episodes.length() - 2);
-				db.execSQL("DELETE FROM directors WHERE serieId='"+ s.getId() +"' AND episodeId IN ("+ episodes +")");
-				db.execSQL("DELETE FROM guestStars WHERE serieId='"+ s.getId() +"' AND episodeId IN ("+ episodes +")");
-				db.execSQL("DELETE FROM writers WHERE serieId='"+ s.getId() +"' AND episodeId IN ("+ episodes +")");
+				if (cms != null) cms.close();
+				if (!episodes.isEmpty()) {
+					episodes = episodes.substring(0, episodes.length() - 2);
+					db.execSQL("DELETE FROM directors WHERE serieId='"+ s.getId() +"' AND episodeId IN ("+ episodes +")");
+					db.execSQL("DELETE FROM guestStars WHERE serieId='"+ s.getId() +"' AND episodeId IN ("+ episodes +")");
+					db.execSQL("DELETE FROM writers WHERE serieId='"+ s.getId() +"' AND episodeId IN ("+ episodes +")");
+				}
 			} else {
 				db.execSQL("DELETE FROM directors WHERE serieId='"+ s.getId() +"'");
 				db.execSQL("DELETE FROM guestStars WHERE serieId='"+ s.getId() +"'");
@@ -957,7 +942,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 				
 				Episode ep = s.getEpisodes().get(e); 
 				
-				if (ep.getEpisodeNumber() == 0 && ep.getEpisodeName().equals(" ") && ep.getOverview() == null) {
+				if (ep.getEpisodeNumber() == 0 && " ".equals(ep.getEpisodeName()) && ep.getOverview() == null) {
 					continue;
 				}
 								
@@ -1073,10 +1058,12 @@ public class SQLiteStore extends SQLiteOpenHelper
 			db.execSQL("DELETE FROM actors WHERE serieId='"+ serieId +"'");
 			db.execSQL("DELETE FROM genres WHERE serieId='"+ serieId +"'");
 			db.execSQL("DELETE FROM serie_seasons WHERE serieId='"+ serieId +"'");
-			c.moveToFirst();
-			if (c != null && c.isFirst()) {
-				File thumbImage = new File(c.getString(0));
-				thumbImage.delete();
+			if (c != null && c.moveToFirst()) {
+				String thumbPath = c.getString(0);
+				if (!TextUtils.isEmpty(thumbPath)) {
+					File thumbImage = new File(thumbPath);
+					thumbImage.delete();
+				}
 			}
 			db.execSQL("DELETE FROM series WHERE id='"+ serieId +"'");
 			db.setTransactionSuccessful();
@@ -1218,7 +1205,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 			this.season = season;
 			this.episode = episode;
 			this.firstAired = firstAired;
-			if (!firstAired.equals("") && !firstAired.equals("null")) {
+			if (!TextUtils.isEmpty(firstAired) && !"null".equals(firstAired)) {
 				try { this.firstAiredDate = new SimpleDateFormat("yyyy-MM-dd").parse(firstAired);	// used by seasons AsyncTask, so shouldn't use dateFormat
 				} catch (ParseException e) { e.printStackTrace(); }
 			}

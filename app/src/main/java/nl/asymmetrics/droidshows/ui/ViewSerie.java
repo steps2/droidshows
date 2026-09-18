@@ -62,8 +62,7 @@ public class ViewSerie extends Activity
 		String query = "SELECT serieName, posterThumb, poster, fanart, overview, status, firstAired, airsDayOfWeek, "
 			+ "airsTime, runtime, network, rating, contentRating, imdbId, mediaType FROM series WHERE id = '" + serieId + "'";
 		Cursor c = db.Query(query);
-		c.moveToFirst();
-		if (c != null && c.isFirst()) {
+		if (c != null && c.moveToFirst()) {
 			int snameCol = c.getColumnIndex("serieName");
 			int posterThumbCol = c.getColumnIndex("posterThumb");
 			int posterCol = c.getColumnIndex("poster");
@@ -96,12 +95,12 @@ public class ViewSerie extends Activity
 			isMovie = (mediaTypeCol != -1 && c.getInt(mediaTypeCol) == 1);
 			c.close();
 					
-			if (!network.equalsIgnoreCase("null")) {
+			if (network != null && !network.equalsIgnoreCase("null")) {
 				TextView networkV = (TextView) findViewById(R.id.network);
 				networkV.setText(network);
 			}
 	
-			if (!contentRating.equalsIgnoreCase("null")) {
+			if (contentRating != null && !contentRating.equalsIgnoreCase("null")) {
 				TextView contentRatingV = (TextView) findViewById(R.id.contentRating);
 				contentRatingV.setText(contentRating);
 			}
@@ -112,8 +111,7 @@ public class ViewSerie extends Activity
 			if (isMovie) {
 				final CheckBox watchedV = (CheckBox) findViewById(R.id.movie_watched);
 				Cursor cmovie = db.Query("SELECT id, seen FROM episodes WHERE serieId='"+ serieId +"' LIMIT 1");
-				cmovie.moveToFirst();
-				if (cmovie != null && cmovie.isFirst()) {
+				if (cmovie != null && cmovie.moveToFirst()) {
 					movieEpisodeId = cmovie.getString(cmovie.getColumnIndex("id"));
 					watchedV.setChecked(cmovie.getInt(cmovie.getColumnIndex("seen")) > 0);
 					watchedV.setVisibility(View.VISIBLE);
@@ -137,13 +135,12 @@ public class ViewSerie extends Activity
 					
 			List<String> genres = new ArrayList<String>();
 			Cursor cgenres = db.Query("SELECT genre FROM genres WHERE serieId='"+ serieId + "'");
-			cgenres.moveToFirst();
-			if (cgenres != null && cgenres.isFirst()) {
+			if (cgenres != null && cgenres.moveToFirst()) {
 				do {
 					genres.add(cgenres.getString(0));
 				} while (cgenres.moveToNext());
 			}
-			cgenres.close();
+			if (cgenres != null) cgenres.close();
 			if (!genres.isEmpty()) {
 				TextView genreV = (TextView) findViewById(R.id.genre);
 				genreV.setText(genres.toString().replace("]", "").replace("[", ""));
@@ -151,13 +148,13 @@ public class ViewSerie extends Activity
 			}
 
 			TextView ratingV = (TextView) findViewById(R.id.rating);
-			if (!rating.equalsIgnoreCase("null") && !rating.equals(""))
+			if (rating != null && !rating.equalsIgnoreCase("null") && !rating.equals(""))
 				ratingV.setText((isMovie ? "TMDB: " : "IMDb: ")+ rating);
 			else
 				ratingV.setText(isMovie ? "TMDB Info" : "IMDb Info");
 			ratingV.setOnTouchListener(swipeDetect);
 					
-			if (!firstAired.equals("null") && !firstAired.equals("")) {
+			if (firstAired != null && !firstAired.equals("null") && !firstAired.equals("")) {
 				TextView firstAiredV = (TextView) findViewById(R.id.firstAired);
 				try {
 					Date epDate = SQLiteStore.dateFormat.parse(firstAired);
@@ -165,7 +162,7 @@ public class ViewSerie extends Activity
 				} catch (ParseException e) {
 					Log.e(SQLiteStore.TAG, e.getMessage());
 				}
-				if (!status.equalsIgnoreCase("null") && !status.equalsIgnoreCase(""))
+				if (status != null && !status.equalsIgnoreCase("null") && !status.equalsIgnoreCase(""))
 					status = " ("+ translateStatus(status) +")";
 				else
 					status = "";
@@ -173,17 +170,17 @@ public class ViewSerie extends Activity
 				firstAiredV.setVisibility(View.VISIBLE);
 			}
 	
-			if (!airday.equalsIgnoreCase("null") && !airday.equals("")) {
+			if (airday != null && !airday.equalsIgnoreCase("null") && !airday.equals("")) {
 				TextView airtimeV = (TextView) findViewById(R.id.airtime);
 				if (airday.equalsIgnoreCase("Daily"))
 					airday = getString(R.string.messages_daily);
-				if (!airtime.equalsIgnoreCase("null") && !airtime.equals("")) {
+				if (airtime != null && !airtime.equalsIgnoreCase("null") && !airtime.equals("")) {
 					airtimeV.setText(airday +" "+ getString(R.string.messages_at) +" "+ airtime);
 					airtimeV.setVisibility(View.VISIBLE);
 				}
 			}
 	
-			if (!runtime.equalsIgnoreCase("null") && !runtime.equals("")) {
+			if (runtime != null && !runtime.equalsIgnoreCase("null") && !runtime.equals("")) {
 				TextView runtimeV = (TextView) findViewById(R.id.runtime);
 				runtimeV.setText(runtime +" "+ getString(R.string.series_runtime_minutes));
 				runtimeV.setVisibility(View.VISIBLE);
@@ -206,13 +203,12 @@ public class ViewSerie extends Activity
 			serieOverviewV.setText(serieOverview);
 
 			Cursor cactors = db.Query("SELECT actor FROM actors WHERE serieId='"+ serieId + "'");
-			cactors.moveToFirst();
-			if (cactors != null && cactors.isFirst()) {
+			if (cactors != null && cactors.moveToFirst()) {
 				do {
 					actors.add(cactors.getString(0));
 				} while (cactors.moveToNext());
 			}
-			cactors.close();
+			if (cactors != null) cactors.close();
 			if (!actors.isEmpty()) {
 				TextView serieActorsV = (TextView) findViewById(R.id.actors);
 				serieActorsV.setText(actors.toString().replace("]", "").replace("[", ""));
@@ -242,7 +238,7 @@ public class ViewSerie extends Activity
 	public void IMDbDetails(View v) {
 		if (swipeDetect.value != 0) return;
 		String uri = this.uri;
-		if (imdbId.startsWith("tt")) {
+		if (imdbId != null && imdbId.startsWith("tt")) {
 			uri += "title/"+ imdbId;
 		} else {
 			uri += "find?q="+ Uri.encode(serieName);
@@ -269,14 +265,14 @@ public class ViewSerie extends Activity
 	public void posterView(View v) {
 		if (!posterLoaded) {
 			posterView = (WebView) findViewById(R.id.posterView);
-			if (posterURL.isEmpty() || posterURL.equalsIgnoreCase("null")) {
-				if (!fanartURL.isEmpty() && !fanartURL.equalsIgnoreCase("null")) {
+			if (posterURL == null || posterURL.isEmpty() || posterURL.equalsIgnoreCase("null")) {
+				if (fanartURL != null && !fanartURL.isEmpty() && !fanartURL.equalsIgnoreCase("null")) {
 					posterURL = fanartURL;
 				} else {
 					return;
 				}
 			}
-			if (fanartURL.isEmpty() || fanartURL.equalsIgnoreCase("null"))
+			if (fanartURL == null || fanartURL.isEmpty() || fanartURL.equalsIgnoreCase("null"))
 				fanartURL = posterURL;
 
 			posterView.getSettings().setBuiltInZoomControls(true);

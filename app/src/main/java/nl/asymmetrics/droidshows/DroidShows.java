@@ -1449,7 +1449,7 @@ public class DroidShows extends AppCompatActivity
 		}
 		String serieId = serie.getSerieId();
 		String nextEpisode = db.getNextEpisodeId(serieId, true);
-		if (!nextEpisode.equals("-1")) {
+		if (nextEpisode != null && !nextEpisode.equals("-1")) {
 			String episodeMarked = db.updateUnwatchedEpisode(serieId, nextEpisode);
 			Toast.makeText(getApplicationContext(), serie.getName() +" "+ episodeMarked +" "+ getString(R.string.messages_marked_seen), Toast.LENGTH_SHORT).show();
 			undo.add(new String[] {serieId, nextEpisode, serie.getName()});
@@ -1540,7 +1540,7 @@ public class DroidShows extends AppCompatActivity
 			episodeId = db.getNextEpisodeId(serieId);
 		else
 			episodeId = seriesAdapter.getItem(position).getEpisodeId();
-		if (!episodeId.equals("-1")) {
+		if (episodeId != null && !episodeId.equals("-1")) {
 			backFromSeasonSerieId = serieId;
 			Intent viewEpisode = new Intent(DroidShows.this, ViewEpisode.class);
 			viewEpisode.putExtra("serieName", seriesAdapter.getItem(position).getName());
@@ -1586,9 +1586,10 @@ public class DroidShows extends AppCompatActivity
 		else
 			query = "SELECT imdbId, serieName FROM series WHERE id = '" + serieId + "'";
 		Cursor c = db.Query(query);
-		c.moveToFirst();
-		if (c != null && c.isFirst()) {
+		if (c != null && c.moveToFirst()) {
 			String imdbId = c.getString(0);
+			if (imdbId == null)
+				imdbId = "";
 			if (episode != null && imdbId.equals(db.getSerieIMDbId(serieId)))	// Sometimes the given episode's IMDb id is that of the show's
 				imdbId = "";	// So we want to search for the episode instead of go to the show's page
 			String name = c.getString(1);
@@ -1759,18 +1760,25 @@ public class DroidShows extends AppCompatActivity
 	@SuppressWarnings("deprecation")
 	public void updatePosterThumb(String serieId, Serie sToUpdate) {
 		Cursor c = DroidShows.db.Query("SELECT posterInCache, poster, posterThumb FROM series WHERE id='"+ serieId +"'");
-		c.moveToFirst();
-		if (c != null && c.isFirst()) {
-			String posterInCache = c.getString(0);
-			String poster = c.getString(1);
-			String posterThumbPath = c.getString(2);
-			URL posterURL = null;
-			if (!posterInCache.equals("true") || !(new File(posterThumbPath).exists())) {
-				poster = sToUpdate.getPoster();
-				try {
-					posterURL = new URL(poster);
+		if (c == null || !c.moveToFirst()) {
+			if (c != null) c.close();
+			return;
+		}
+		String posterInCache = c.getString(0);
+		String poster = c.getString(1);
+		String posterThumbPath = c.getString(2);
+		c.close();
+		URL posterURL = null;
+		boolean thumbCached = "true".equals(posterInCache) && posterThumbPath != null && new File(posterThumbPath).exists();
+		if (!thumbCached) {
+			poster = sToUpdate.getPoster();
+			if (poster == null)
+				return;
+			try {
+				posterURL = new URL(poster);
+				if (posterThumbPath != null)
 					new File(posterThumbPath).delete();
-					posterThumbPath = getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs"+ posterURL.getFile().toString();
+				posterThumbPath = getApplicationContext().getFilesDir().getAbsolutePath() +"/thumbs"+ posterURL.getFile().toString();
 				} catch (MalformedURLException e) {
 					Log.e(SQLiteStore.TAG, sToUpdate.getSerieName() +" doesn't have a poster URL");
 					e.printStackTrace();
@@ -1816,8 +1824,6 @@ public class DroidShows extends AppCompatActivity
 				posterThumb = null;
 				resizedBitmap = null;
 			}
-		}
-		c.close();
 	}
 
 	/** Non-intrusive progress: a thin bar at the top of the list; the list and app stay usable.
@@ -2423,7 +2429,7 @@ public class DroidShows extends AppCompatActivity
 				if (holder.sne != null) {
 					if (isMovie) {
 						holder.sne.setText("");
-					} else if (nunwatched > 0 && !serie.getNextEpisode().isEmpty()) {
+					} else if (nunwatched > 0 && serie.getNextEpisode() != null && !serie.getNextEpisode().isEmpty()) {
 						holder.sne.setText(serie.getNextEpisode() == null ? "" : serie.getNextEpisode()
 							.replace("[ne]", strNextEp)
 							.replace("[na]", strNextAiring)
