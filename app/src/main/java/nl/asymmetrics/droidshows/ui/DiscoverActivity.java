@@ -118,13 +118,7 @@ public class DiscoverActivity extends AppCompatActivity {
 				final List<Serie> data;
 				String problem = null;
 				if (want == 0) {
-					List<Serie> tmp = null;
-					try {
-						tmp = new TVMaze().getScheduleShows();
-					} catch (JsonFetcher.RateLimitException e) {
-						problem = "rate";
-					}
-					data = tmp;
+					data = loadMixedShows();
 				} else {
 					String key = getSharedPreferences("DroidShowsPref", 0)
 						.getString(DroidShows.TMDB_API_KEY_NAME, "");
@@ -153,8 +147,55 @@ public class DiscoverActivity extends AppCompatActivity {
 		}).start();
 	}
 
-	private void refreshLibraryIds() {
-		inLibrary.clear();
+	/** TV Discover feed: a mix of popular, top-rated and currently-airing shows
+	 *  (via TMDB), each mapped to TVMaze so it can be added like any show.
+	 *  Without a TMDB key it falls back to the TVMaze airing-today schedule. */
+	private List<Serie> loadMixedShows() {
+		String key = getSharedPreferences("DroidShowsPref", 0)
+			.getString(DroidShows.TMDB_API_KEY_NAME, "");
+		TVMaze tvMaze = new TVMaze();
+		if (key == null || key.isEmpty()) {
+			try { return tvMaze.getScheduleShows(); }
+			catch (JsonFetcher.RateLimitException e) { return null; }
+		}
+		TMDB tmdb = new TMDB(key);
+		List<Serie> popular = tmdb.getTVList("popular");
+		List<Serie> topRated = tmdb.getTVList("top_rated");
+		List<Serie> onAir = tmdb.getTVList("on_the_air");
+		if (popular == null && topRated == null && onAir == null) return null;
+		// round-robin interleave so the three sources are genuinely mixed
+		List<Serie> candidates = new ArrayList<Serie>();
+		Set<String> seenTmdb = new HashSet<String>();
+		for (int i = 0; i < 8; i++) {
+			addCandidate(candidates, seenTmdb, popular, i);
+			addCandidate(candidates, seenTmdb, topRated, i);
+			addCandidate(candidates, seenTmdb, onAir, i);
+		}
+		List<Serie> mixed = new ArrayList<Serie>();
+		Set<String> seenTvmaze = new HashSet<String>();
+		for (Serie c : candidates) {
+			if (mixed.size() >= 20) break;
+			try {
+				List<Serie> hits = tvMaze.searchShows(c.getSerieName());
+				if (hits == null || hits.isEmpty()) continue;
+				Serie show = hits.get(0);
+				if (show.getTvmazeId() == null || !seenTvmaze.add(show.getTvmazeId())) continue;
+				mixed.add(show);
+			} catch (JsonFetcher.RateLimitException e) {
+				break; // rate-limited: show what we have so far
+			}
+		}
+		return mixed;
+	}
+
+	private void addCandidate(List<Serie> out, Set<String> seen, List<Serie> src, int i) {
+		if (src == null || i >= src.size()) return;
+		Serie s = src.get(i);
+		if (s.getId() == null || !seen.add(s.getId())) return;
+		out.add(s);
+	}
+
+	private void refreshLibraryIds() {		inLibrary.clear();
 		try {
 			android.database.Cursor c = DroidShows.db.Query("SELECT id, tvmazeId, mediaType FROM series");
 			if (c != null) {

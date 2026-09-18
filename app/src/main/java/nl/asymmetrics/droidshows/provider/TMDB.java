@@ -96,6 +96,42 @@ public class TMDB {
 	}
 
 	/**
+	 * TV show list from TMDB: category is "popular", "top_rated" or
+	 * "on_the_air". The returned Series carry the TMDB id; callers map them
+	 * to TVMaze via searchShows(name). Returns null on failure.
+	 */
+	public List<Serie> getTVList(String category) {
+		String url = BASE + "/tv/" + category + "?api_key=" + apiKey + "&include_adult=false&page=1";
+		String json = fetchJson(url);
+		if (json == null) return null;
+		try {
+			JSONObject root = new JSONObject(json);
+			JSONArray results = root.optJSONArray("results");
+			List<Serie> tv = new ArrayList<Serie>();
+			if (results != null) {
+				for (int i = 0; i < results.length(); i++) {
+					JSONObject t = results.optJSONObject(i);
+					if (t == null) continue;
+					Serie s = new Serie();
+					String id = String.valueOf(t.optInt("id", 0));
+					s.setId(id);
+					s.setSerieId(id);
+					s.setSerieName(t.optString("name", ""));
+					s.setOverview(t.optString("overview", ""));
+					s.setFirstAired(t.optString("first_air_date", ""));
+					s.setPoster(imageUrl(t.optString("poster_path", null), "w500"));
+					s.setLanguage(t.optString("original_language", ""));
+					s.setMediaType(0);
+					tv.add(s);
+				}
+			}
+			return tv;
+		} catch (Exception e) {
+			Log.e(TAG, "getTVList failed: " + e.getMessage());
+			return null;
+		}
+	}
+	/**
 	 * Fetch full movie details plus credits. Builds the Serie with its single
 	 * pseudo-episode (season 1 / episode 1 representing the film itself).
 	 * Returns null on failure.
