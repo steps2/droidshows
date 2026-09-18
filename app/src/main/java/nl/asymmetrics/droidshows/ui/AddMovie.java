@@ -321,7 +321,7 @@ public class AddMovie extends AppCompatActivity
 			String posterThumbPath = null;
 			try {
 				posterURL = new URL(poster);
-				posterThumbPath = Utils.posterFile(getApplicationContext(), posterURL).getAbsolutePath();
+				posterThumbPath = Utils.libraryPosterFile(getApplicationContext(), posterURL).getAbsolutePath();
 			} catch (MalformedURLException e) {
 				Log.e(SQLiteStore.TAG, mToAdd.getSerieName() +" doesn't have a poster URL");
 				e.printStackTrace();

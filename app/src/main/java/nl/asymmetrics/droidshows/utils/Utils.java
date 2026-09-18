@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import android.database.Cursor;
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -84,17 +87,51 @@ public class Utils
 
 	/* Poster storage: everything lives under the app cache dir so posters
 	 * count as cache (clearable, reclaimable by the OS) instead of permanent
-	 * app data. The cache is capped at POSTER_CACHE_MAX_BYTES with
-	 * oldest-first eviction; a pruned poster simply re-downloads on demand. */
-	public static final long POSTER_CACHE_MAX_BYTES = 50L * 1024L * 1024L;
+	 * app data. Library posters (shows/movies the user added) are kept
+	 * permanently under thumbs/library and are never pruned. Discover
+	 * posters are disposable: they live under thumbs/discover, capped at the
+	 * user-chosen size (minimum 50MB) with oldest-first eviction; a pruned
+	 * poster simply re-downloads on demand. */
+	public static final String PREFS_NAME = "DroidShowsPref";
+	public static final String POSTER_CACHE_SIZE_KEY = "poster_cache_size_mb";
+	public static final long POSTER_CACHE_MIN_MB = 50;
+
+	public static long getPosterCacheMaxBytes(Context ctx) {
+		long mb = POSTER_CACHE_MIN_MB;
+		try {
+			mb = ctx.getSharedPreferences(PREFS_NAME, 0).getLong(POSTER_CACHE_SIZE_KEY, POSTER_CACHE_MIN_MB);
+		} catch (Exception ignored) {}
+		if (mb < POSTER_CACHE_MIN_MB) mb = POSTER_CACHE_MIN_MB;
+		return mb * 1024L * 1024L;
+	}
+
+	public static void setPosterCacheMaxMB(Context ctx, long mb) {
+		if (mb < POSTER_CACHE_MIN_MB) mb = POSTER_CACHE_MIN_MB;
+		try {
+			ctx.getSharedPreferences(PREFS_NAME, 0).edit().putLong(POSTER_CACHE_SIZE_KEY, mb).apply();
+		} catch (Exception ignored) {}
+	}
 
 	public static File posterDir(Context ctx) {
 		return new File(ctx.getCacheDir(), "thumbs");
 	}
 
-	/** Cache file for the poster at url, mirroring its path under /thumbs. */
-	public static File posterFile(Context ctx, URL url) {
-		return new File(posterDir(ctx), url.getFile());
+	public static File libraryPosterDir(Context ctx) {
+		return new File(posterDir(ctx), "library");
+	}
+
+	public static File discoverPosterDir(Context ctx) {
+		return new File(posterDir(ctx), "discover");
+	}
+
+	/** Cache file for a library poster at url. */
+	public static File libraryPosterFile(Context ctx, URL url) {
+		return new File(libraryPosterDir(ctx), url.getFile());
+	}
+
+	/** Cache file for a Discover poster at url. */
+	public static File discoverPosterFile(Context ctx, URL url) {
+		return new File(discoverPosterDir(ctx), url.getFile());
 	}
 
 	public static void downloadPosterThumb(Context ctx, URL url, File file) throws IOException {
@@ -116,19 +153,91 @@ public class Utils
 			deleteTree(oldDir);
 	}
 
+	/** Split cache/thumbs into library/ (DB-referenced posters, never pruned)
+	 *  and discover/ (everything else, pruned). Idempotent. */
+	public static void organizePosterCache(Context ctx, SQLiteStore db) {
+		File base = posterDir(ctx);
+		if (!base.exists()) return;
+		File libDir = libraryPosterDir(ctx);
+		File discDir = discoverPosterDir(ctx);
+		libDir.mkdirs();
+		discDir.mkdirs();
+		String basePath;
+		try { basePath = base.getCanonicalPath(); }
+		catch (IOException e) { basePath = base.getAbsolutePath(); }
+		String libPrefix = "library" + File.separator;
+		String discPrefix = "discover" + File.separator;
+		// 1. every DB-referenced poster -> library/
+		try {
+			Cursor c = db.Query("SELECT DISTINCT posterThumb FROM series WHERE posterThumb IS NOT NULL AND posterThumb != ''");
+			if (c != null) {
+				while (c.moveToNext()) {
+					String p = c.getString(0);
+					if (p == null || p.isEmpty()) continue;
+					String fp;
+					try { fp = new File(p).getCanonicalPath(); }
+					catch (IOException e) { continue; }
+					if (!fp.startsWith(basePath + File.separator)) continue;
+					String rel = fp.substring(basePath.length() + 1);
+					if (rel.startsWith(libPrefix) || rel.startsWith(discPrefix)) continue;
+					File dest = new File(libDir, rel);
+					if (moveFile(new File(fp), dest)) {
+						String newPath = dest.getAbsolutePath();
+						if (!newPath.equals(p))
+							db.execQuery("UPDATE series SET posterThumb='" + sqlEsc(newPath) + "' WHERE posterThumb='" + sqlEsc(p) + "'");
+					}
+				}
+				c.close();
+			}
+		} catch (Exception e) {
+			Log.e("DroidShows", "organizePosterCache db pass failed", e);
+		}
+		// 2. anything else directly under thumbs/ -> discover/
+		File[] kids = base.listFiles();
+		if (kids != null) {
+			for (File k : kids) {
+				if (k.getAbsolutePath().equals(libDir.getAbsolutePath())
+						|| k.getAbsolutePath().equals(discDir.getAbsolutePath())) continue;
+				moveFile(k, new File(discDir, k.getName()));
+			}
+		}
+	}
+
+	private static String sqlEsc(String s) {
+		return s.replace("'", "''");
+	}
+
+	private static boolean moveFile(File src, File dest) {
+		if (src.getAbsolutePath().equals(dest.getAbsolutePath())) return true;
+		if (!src.exists() || dest.exists()) return dest.exists();
+		File parent = dest.getParentFile();
+		if (parent != null) parent.mkdirs();
+		return src.renameTo(dest);
+	}
+
+	/** Whole poster cache (used after a restore: everything is stale). */
 	public static void clearPosterCache(Context ctx) {
 		deleteTree(posterDir(ctx));
 	}
 
-	/** Delete oldest poster files until the cache is under the cap. */
+	/** Only the disposable Discover posters; library posters are kept. */
+	public static void clearDiscoverCache(Context ctx) {
+		deleteTree(discoverPosterDir(ctx));
+	}
+
+	/** Delete oldest Discover posters until the cache is under the cap.
+	 *  Library posters are never touched. */
 	public static void prunePosterCache(Context ctx) {
-		File dir = posterDir(ctx);
+		pruneDirTo(discoverPosterDir(ctx), getPosterCacheMaxBytes(ctx));
+	}
+
+	private static void pruneDirTo(File dir, long maxBytes) {
 		if (!dir.exists()) return;
 		List<File> files = new ArrayList<File>();
 		collectFiles(dir, files);
 		long total = 0;
 		for (File f : files) total += f.length();
-		if (total <= POSTER_CACHE_MAX_BYTES) return;
+		if (total <= maxBytes) return;
 		Collections.sort(files, new Comparator<File>() {
 			public int compare(File a, File b) {
 				long d = a.lastModified() - b.lastModified();
@@ -136,7 +245,7 @@ public class Utils
 			}
 		});
 		for (File f : files) {
-			if (total <= POSTER_CACHE_MAX_BYTES) break;
+			if (total <= maxBytes) break;
 			long len = f.length();
 			if (f.delete()) total -= len;
 		}

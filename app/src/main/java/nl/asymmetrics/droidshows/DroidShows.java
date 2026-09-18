@@ -271,7 +271,8 @@ public class DroidShows extends AppCompatActivity
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
 		// One-time move of poster files from the old files-dir location to the
-		// cache dir (plus the matching DB path rewrite); then prune the poster
+		// cache dir (plus the matching DB path rewrite), split library and
+		// Discover posters, then prune the Discover cache to its size cap.
 		// cache to its size cap. Runs off the UI thread: file I/O + DB write.
 		new Thread(new Runnable() {
 			public void run() {
@@ -279,8 +280,11 @@ public class DroidShows extends AppCompatActivity
 					File oldDir = new File(getApplicationContext().getFilesDir(), "thumbs");
 					if (oldDir.exists()) {
 						Utils.migratePosterCache(getApplicationContext());
-						db.execQuery("UPDATE series SET posterThumb = REPLACE(posterThumb, '/files/thumbs', '/cache/thumbs')");
+						db.execQuery("UPDATE series SET posterThumb = REPLACE(posterThumb, '/files/thumbs', '/cache/thumbs/library')");
 					}
+					// library posters -> thumbs/library (never pruned),
+					// everything else -> thumbs/discover (capped)
+					Utils.organizePosterCache(getApplicationContext(), db);
 					Utils.prunePosterCache(getApplicationContext());
 				} catch (Exception e) {
 					Log.e(SQLiteStore.TAG, "poster cache migration failed", e);
@@ -942,6 +946,7 @@ public class DroidShows extends AppCompatActivity
 		((TextView) about.findViewById(R.id.change_language)).setText(getString(R.string.dialog_change_language) +" ("+ langCode +")");
 		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(ThemeHelper.THEME_PREF_NAME, ThemeHelper.THEME_AUTOMATIC);
 		((Button) about.findViewById(R.id.theme_option)).setText(getString(R.string.settings_theme) +": "+ themeName(themeMode));
+		((Button) about.findViewById(R.id.poster_cache_size)).setText(getString(R.string.dialog_poster_cache_size) +": "+ (Utils.getPosterCacheMaxBytes(this) / (1024*1024)) +" MB");
 		((CheckBox) about.findViewById(R.id.auto_backup)).setChecked(autoBackup);
 		((CheckBox) about.findViewById(R.id.backup_versioning)).setChecked(backupVersioning);
 		((CheckBox) about.findViewById(R.id.latest_season)).setChecked(latestSeasonOption == UPDATE_LATEST_SEASON_ONLY);
@@ -988,11 +993,32 @@ public class DroidShows extends AppCompatActivity
 			case R.id.clear_poster_cache:
 				new Thread(new Runnable() {
 					public void run() {
-						Utils.clearPosterCache(getApplicationContext());
+						Utils.clearDiscoverCache(getApplicationContext());
 						toastOnUi(R.string.poster_cache_cleared);
 					}
 				}).start();
 				break;
+			case R.id.poster_cache_size: {
+				final long[] sizes = {50, 100, 200, 500};
+				final String[] labels = {"50 MB", "100 MB", "200 MB", "500 MB"};
+				long curMB = Utils.getPosterCacheMaxBytes(this) / (1024*1024);
+				int checked = 0;
+				for (int i = 0; i < sizes.length; i++) if (sizes[i] == curMB) checked = i;
+				new MaterialAlertDialogBuilder(this)
+					.setTitle(R.string.dialog_poster_cache_size)
+					.setSingleChoiceItems(labels, checked, new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int which) {
+							Utils.setPosterCacheMaxMB(getApplicationContext(), sizes[which]);
+							((Button) m_AlertDlg.findViewById(R.id.poster_cache_size))
+									.setText(getString(R.string.dialog_poster_cache_size) +": "+ sizes[which] +" MB");
+							new Thread(new Runnable() {
+								public void run() { Utils.prunePosterCache(getApplicationContext()); }
+							}).start();
+							dialog.dismiss();
+						}
+					}).show();
+				break;
+			}
 			case R.id.auto_backup:
 				autoBackup ^= true;
 				break;
@@ -1910,7 +1936,7 @@ public class DroidShows extends AppCompatActivity
 				posterURL = new URL(poster);
 				if (posterThumbPath != null)
 					new File(posterThumbPath).delete();
-				posterThumbPath = Utils.posterFile(getApplicationContext(), posterURL).getAbsolutePath();
+				posterThumbPath = Utils.libraryPosterFile(getApplicationContext(), posterURL).getAbsolutePath();
 				} catch (MalformedURLException e) {
 					Log.e(SQLiteStore.TAG, sToUpdate.getSerieName() +" doesn't have a poster URL");
 					e.printStackTrace();

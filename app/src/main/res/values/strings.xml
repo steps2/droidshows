@@ -39,8 +39,9 @@
 <string name="dialog_auto_backup">Automatically perform daily backups</string>
 <string name="dialog_backup_versioning">Use versioning for backups</string>
 <string name="dialog_backup">Backup</string>
-<string name="dialog_clear_poster_cache">Clear poster cache</string>
-<string name="poster_cache_cleared">Poster cache cleared</string>
+<string name="dialog_clear_poster_cache">Clear Discover poster cache</string>
+<string name="dialog_poster_cache_size">Discover poster cache size</string>
+<string name="poster_cache_cleared">Discover poster cache cleared</string>
 <string name="dialog_backup_done">Database backup completed</string>
 <string name="dialog_backup_failed">Unable to perform backup!</string>
 <string name="dialog_backup_usefolder">Use folder for daily backups</string>
