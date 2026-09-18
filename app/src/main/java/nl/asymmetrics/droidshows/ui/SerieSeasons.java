@@ -48,6 +48,8 @@ public class SerieSeasons extends AppCompatActivity
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
+		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);
 		this.overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.serie_seasons);

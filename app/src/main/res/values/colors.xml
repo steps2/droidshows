@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="amoled_accent">#03DAC6</color>
     <color name="swipe_m3_1">#6750A4</color>
     <color name="swipe_m3_2">#7F67BE</color>
     <color name="swipe_m3_3">#D0BCFF</color>

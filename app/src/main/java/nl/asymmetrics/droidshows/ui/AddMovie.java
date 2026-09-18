@@ -93,6 +93,8 @@ public class AddMovie extends AppCompatActivity
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
+		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.add_movie);
 		searchView = (androidx.appcompat.widget.SearchView) findViewById(R.id.add_movie_searchview);

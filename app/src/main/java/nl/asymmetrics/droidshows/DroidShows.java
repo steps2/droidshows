@@ -190,11 +190,6 @@ public class DroidShows extends AppCompatActivity
 	private Utils utils = new Utils();
 	private Update updateDS;
 	private static final String PREF_NAME = "DroidShowsPref";
-	private static final String THEME_PREF_NAME = "theme";
-	private static final int THEME_AUTOMATIC = 0;
-	private static final int THEME_LIGHT = 1;
-	private static final int THEME_DARK = 2;
-	private static final int THEME_AMOLED = 3;
 	private SharedPreferences sharedPrefs;
 	private static final String AUTO_BACKUP_PREF_NAME = "auto_backup";
 	private static boolean autoBackup;
@@ -264,15 +259,8 @@ public class DroidShows extends AppCompatActivity
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		installCrashReporter();
-		// Apply the saved theme before the window is created.
-		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
-		if (themeMode == THEME_AMOLED) {
-			AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
-			setTheme(R.style.Theme_TVMovieTracker_Amoled);
-		} else {
-			AppCompatDelegate.setDefaultNightMode(themeMode == THEME_LIGHT ? AppCompatDelegate.MODE_NIGHT_NO : themeMode == THEME_DARK ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
-			setTheme(R.style.Theme_TVMovieTracker);
-		}
+		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
+		ThemeHelper.applyTheme(this);
 		super.onCreate(savedInstanceState);
 		if (!isTaskRoot()) {	// Prevent multiple instances: https://stackoverflow.com/a/11042163
 			final Intent intent = getIntent();
@@ -919,7 +907,7 @@ public class DroidShows extends AppCompatActivity
 			e.printStackTrace();
 		}
 		((TextView) about.findViewById(R.id.change_language)).setText(getString(R.string.dialog_change_language) +" ("+ langCode +")");
-		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
+		int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(ThemeHelper.THEME_PREF_NAME, ThemeHelper.THEME_AUTOMATIC);
 		((Button) about.findViewById(R.id.theme_option)).setText(getString(R.string.settings_theme) +": "+ themeName(themeMode));
 		((CheckBox) about.findViewById(R.id.auto_backup)).setChecked(autoBackup);
 		((CheckBox) about.findViewById(R.id.backup_versioning)).setChecked(backupVersioning);
@@ -947,9 +935,9 @@ public class DroidShows extends AppCompatActivity
 
 	private String themeName(int mode) {
 		switch (mode) {
-			case THEME_LIGHT: return getString(R.string.theme_light);
-			case THEME_DARK: return getString(R.string.theme_dark);
-			case THEME_AMOLED: return getString(R.string.theme_amoled);
+			case ThemeHelper.THEME_LIGHT: return getString(R.string.theme_light);
+			case ThemeHelper.THEME_DARK: return getString(R.string.theme_dark);
+			case ThemeHelper.THEME_AMOLED: return getString(R.string.theme_amoled);
 			default: return getString(R.string.theme_automatic);
 		}
 	}
@@ -997,12 +985,12 @@ public class DroidShows extends AppCompatActivity
 				updateShowStats();
 				break;
 			case R.id.theme_option:
-				int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(THEME_PREF_NAME, THEME_AUTOMATIC);
+				int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(ThemeHelper.THEME_PREF_NAME, ThemeHelper.THEME_AUTOMATIC);
 				new MaterialAlertDialogBuilder(this)
 					.setTitle(R.string.settings_theme)
 					.setSingleChoiceItems(new String[]{ getString(R.string.theme_automatic), getString(R.string.theme_light), getString(R.string.theme_dark), getString(R.string.theme_amoled)}, themeMode, new DialogInterface.OnClickListener() {
 						public void onClick(DialogInterface dialog, int which) {
-							sharedPrefs.edit().putInt(THEME_PREF_NAME, which).apply();
+							sharedPrefs.edit().putInt(ThemeHelper.THEME_PREF_NAME, which).apply();
 							dialog.dismiss();
 							recreate();
 						}
@@ -2018,7 +2006,7 @@ public class DroidShows extends AppCompatActivity
 		androidx.core.app.NotificationCompat.Builder builder =
 			new androidx.core.app.NotificationCompat.Builder(getApplicationContext(), NOTIFY_CHANNEL_ID)
 				.setContentIntent(appIntent)
-				.setSmallIcon(R.drawable.noposter)
+				.setSmallIcon(R.drawable.ic_stat_tv)
 				.setContentTitle(getString(R.string.messages_thetvdb_con_error))
 				.setContentText(error)
 				.setAutoCancel(true);

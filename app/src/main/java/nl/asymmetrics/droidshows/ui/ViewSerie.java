@@ -49,6 +49,8 @@ public class ViewSerie extends Activity
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
+		nl.asymmetrics.droidshows.ThemeHelper.applyTheme(this);
 		this.overridePendingTransition(R.anim.left_enter, R.anim.left_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.view_serie);
