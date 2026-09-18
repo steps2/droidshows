@@ -30,7 +30,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Looper;
 import android.util.Log;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
@@ -177,9 +176,11 @@ public class AddSerie extends AppCompatActivity
 			search_series = searchWithRetry(searchQuery);
 			if (search_series == null) {
 				dismissProgress();
-				Looper.prepare();
-					Toast.makeText(getApplicationContext(), R.string.messages_thetvdb_con_error, Toast.LENGTH_LONG).show();
-				Looper.loop();
+				new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+					public void run() {
+						Toast.makeText(getApplicationContext(), R.string.messages_thetvdb_con_error, Toast.LENGTH_LONG).show();
+					}
+				});
 			} else {
 				runOnUiThread(loadSearchSeries);
 			}

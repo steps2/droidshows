@@ -32,6 +32,16 @@ public class TMDB {
 	private static final String IMAGE_BASE = "https://image.tmdb.org/t/p/";
 	private static final String USER_AGENT = "DroidShows/14.12";
 
+	/** Rate limiting: TMDB allows ~40 requests per 10 seconds per key.
+	 *  Keep a minimum gap between requests (~3/sec max) and back off on
+	 *  HTTP 429. State is static so concurrent callers from any thread or
+	 *  TMDB instance share one throttle. */
+	private static final long MIN_REQUEST_INTERVAL_MS = 350;
+	private static final int MAX_ATTEMPTS = 4;	// 1 initial request + up to 3 retries on 429
+	private static final long RETRY_AFTER_MAX_MS = 30000;	// never sleep longer than this on a 429
+	private static final Object THROTTLE_LOCK = new Object();
+	private static long lastRequestTimeMs = 0;
+
 	private final String apiKey;
 
 	public TMDB(String apiKey) {
@@ -233,32 +243,87 @@ public class TMDB {
 	}
 
 	private String fetchJson(String urlStr) {
-		HttpsURLConnection conn = null;
-		try {
-			URL url = new URL(urlStr);
-			conn = (HttpsURLConnection) url.openConnection();
-			conn.setConnectTimeout(10000);
-			conn.setReadTimeout(10000);
-			conn.setRequestProperty("User-Agent", USER_AGENT);
-			conn.setRequestProperty("Accept", "application/json");
-			int code = conn.getResponseCode();
-			if (code != 200) {
-				if (code != 401) Log.e(TAG, "fetchJson HTTP " + code);
+		int attempt = 0;
+		long backoffMs = 1000;
+		while (true) {
+			attempt++;
+			throttle();
+			HttpsURLConnection conn = null;
+			try {
+				URL url = new URL(urlStr);
+				conn = (HttpsURLConnection) url.openConnection();
+				conn.setConnectTimeout(10000);
+				conn.setReadTimeout(10000);
+				conn.setRequestProperty("User-Agent", USER_AGENT);
+				conn.setRequestProperty("Accept", "application/json");
+				int code = conn.getResponseCode();
+				if (code == 429 && attempt < MAX_ATTEMPTS) {
+					long waitMs = retryAfterMs(conn);
+					if (waitMs < 0) {	// no (usable) Retry-After header: exponential backoff
+						waitMs = backoffMs;
+						backoffMs = Math.min(backoffMs * 2, RETRY_AFTER_MAX_MS);
+					}
+					Log.w(TAG, "fetchJson throttled (HTTP 429), retrying in " + waitMs + "ms");
+					sleepQuietly(waitMs);
+					continue;
+				}
+				if (code != 200) {
+					if (code != 401) Log.e(TAG, "fetchJson HTTP " + code);
+					return null;
+				}
+				InputStream in = conn.getInputStream();
+				BufferedReader reader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+				StringBuilder sb = new StringBuilder();
+				String line;
+				while ((line = reader.readLine()) != null) sb.append(line).append('\n');
+				reader.close();
+				return sb.toString();
+			} catch (IOException e) {
+				// never log the URL: it carries the API key
+				Log.e(TAG, "fetchJson failed: " + e.getMessage());
 				return null;
+			} finally {
+				if (conn != null) conn.disconnect();
 			}
-			InputStream in = conn.getInputStream();
-			BufferedReader reader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
-			StringBuilder sb = new StringBuilder();
-			String line;
-			while ((line = reader.readLine()) != null) sb.append(line).append('\n');
-			reader.close();
-			return sb.toString();
-		} catch (IOException e) {
-			// never log the URL: it carries the API key
-			Log.e(TAG, "fetchJson failed: " + e.getMessage());
-			return null;
-		} finally {
-			if (conn != null) conn.disconnect();
+		}
+	}
+
+	/** Enforce the minimum gap between TMDB requests across all threads. */
+	private static void throttle() {
+		synchronized (THROTTLE_LOCK) {
+			long waitMs;
+			while ((waitMs = MIN_REQUEST_INTERVAL_MS - (System.currentTimeMillis() - lastRequestTimeMs)) > 0) {
+				try {
+					THROTTLE_LOCK.wait(waitMs);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
+				}
+			}
+			lastRequestTimeMs = System.currentTimeMillis();
+		}
+	}
+
+	/** Retry-After response header in milliseconds, or -1 when absent or
+	 *  unusable (e.g. HTTP-date form). Capped so a bad header can't stall
+	 *  a worker thread for long. */
+	private static long retryAfterMs(HttpsURLConnection conn) {
+		String v = conn.getHeaderField("Retry-After");
+		if (v == null) return -1;
+		try {
+			long seconds = Long.parseLong(v.trim());
+			if (seconds < 0) return -1;
+			return Math.min(seconds * 1000L, RETRY_AFTER_MAX_MS);
+		} catch (NumberFormatException e) {
+			return -1;
+		}
+	}
+
+	private static void sleepQuietly(long ms) {
+		try {
+			Thread.sleep(ms);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 }

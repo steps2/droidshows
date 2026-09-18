@@ -29,7 +29,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Looper;
 import android.util.Log;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
@@ -184,9 +183,11 @@ public class AddMovie extends AppCompatActivity
 			search_movies = tmdb.searchMovies(searchQuery);
 			if (search_movies == null) {
 				dismissProgress();
-				Looper.prepare();
-					Toast.makeText(getApplicationContext(), R.string.messages_tmdb_con_error, Toast.LENGTH_LONG).show();
-				Looper.loop();
+				new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+					public void run() {
+						Toast.makeText(getApplicationContext(), R.string.messages_tmdb_con_error, Toast.LENGTH_LONG).show();
+					}
+				});
 			} else {
 				runOnUiThread(loadSearchMovies);
 			}

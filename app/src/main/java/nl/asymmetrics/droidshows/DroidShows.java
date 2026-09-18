@@ -75,7 +75,6 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Looper;
 import android.os.Vibrator;
 import android.text.Editable;
 import android.text.InputType;
@@ -1383,11 +1382,14 @@ public class DroidShows extends AppCompatActivity
 							toastMsg = serie.getMediaType() == 1 ? getString(R.string.messages_error_dbdelete_movie) : "Database error while deleting show";
 						series.remove(series.indexOf(serie));
 						listView.post(updateListView);
-						Looper.prepare();	// Threads don't have a message loop
-							Toast.makeText(getApplicationContext(), sname +" "+ toastMsg, Toast.LENGTH_LONG).show();
-							asyncInfo = new AsyncInfo();
-							asyncInfo.execute();
-						Looper.loop();
+						final String toastText = sname +" "+ toastMsg;
+						new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+							public void run() {
+								Toast.makeText(getApplicationContext(), toastText, Toast.LENGTH_LONG).show();
+							}
+						});
+						asyncInfo = new AsyncInfo();
+						asyncInfo.execute();
 					}
 				};
 				AlertDialog.Builder alertDialog = new MaterialAlertDialogBuilder(this)
@@ -1714,7 +1716,7 @@ public class DroidShows extends AppCompatActivity
 					if (isMovie) {
 						if (apiKey == null || apiKey.isEmpty()) {
 							errorNotify(serieName);
-							dismissUpdateProgress();
+							hideTopProgress();
 							return;
 						}
 						sToUpdate = new TMDB(apiKey).getMovie(serieId);
@@ -1723,14 +1725,14 @@ public class DroidShows extends AppCompatActivity
 						tvmazeId = resolveTvmazeId(tvMaze, serieId);
 						if (tvmazeId == null || tvmazeId.isEmpty()) {
 							errorNotify(serieName);
-							dismissUpdateProgress();
+							hideTopProgress();
 							return;
 						}
 						sToUpdate = getTVMazeShow(tvMaze, tvmazeId);
 					}
 					if (sToUpdate == null) {
 						errorNotify(serieName);
-						dismissUpdateProgress();
+						hideTopProgress();
 					} else {
 						if (!isMovie) {	// keep the existing DB row; TVMaze id goes to tvmazeId
 							sToUpdate.setId(serieId);
@@ -1741,13 +1743,14 @@ public class DroidShows extends AppCompatActivity
 						if (!db.updateSerie(sToUpdate, lastSeasonOnly))
 							toastMsg = isMovie ? getString(R.string.messages_error_dbupdate_movie) : "Database error while updating show";
 						updatePosterThumb(serieId, sToUpdate);
-						dismissUpdateProgress();
-						Looper.prepare();
-							Toast.makeText(getApplicationContext(),
-								sToUpdate.getSerieName() +" "+ toastMsg,
-								Toast.LENGTH_SHORT).show();
-							listView.post(updateShowView(serieId));
-						Looper.loop();
+						hideTopProgress();
+						final String toastText = sToUpdate.getSerieName() +" "+ toastMsg;
+						new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+							public void run() {
+								Toast.makeText(getApplicationContext(), toastText, Toast.LENGTH_SHORT).show();
+							}
+						});
+						listView.post(updateShowView(serieId));
 					}
 				}
 			};
@@ -1830,19 +1833,15 @@ public class DroidShows extends AppCompatActivity
 	 *  Driven through the app-wide SyncProgress so the bar stays visible (and keeps
 	 *  moving) on the seasons/episodes/detail screens too, until the work finishes. */
 	private void showTopProgress(final boolean indeterminate, final int max) {
-		SyncProgress.show(indeterminate, max);
+		DroidShowsApp.beginOperation(indeterminate, max);
 	}
 
 	private void hideTopProgress() {
-		SyncProgress.hide();
+		DroidShowsApp.endOperation();
 	}
 
 	private void setTopProgress(final int progress) {
 		SyncProgress.set(progress);
-	}
-
-	private void dismissUpdateProgress() {
-		hideTopProgress();
 	}
 
 	public void clearFilter(View v) {
@@ -1939,11 +1938,19 @@ public class DroidShows extends AppCompatActivity
 							try {
 								boolean lastSeasonOnly = !isMovie && latestSeasonOption == UPDATE_LATEST_SEASON_ONLY;
 								if (!db.updateSerie(sToUpdate, lastSeasonOnly)) {
-									Looper.prepare();	// Threads don't have a message loop
-									String error = getString(R.string.messages_error_dbupdate) +" "+ sToUpdate.getSerieName();
+									final String error = getString(R.string.messages_error_dbupdate) +" "+ sToUpdate.getSerieName();
 									Log.e(SQLiteStore.TAG, error);
-									Toast.makeText(getApplicationContext(), error, Toast.LENGTH_LONG).show();
-									Looper.loop();
+									new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+										public void run() {
+											Toast.makeText(getApplicationContext(), error, Toast.LENGTH_LONG).show();
+										}
+									});
+									// A failed DB write poisons the run: stop the loop so the
+									// epilogue below still runs (hides the progress bar via
+									// SyncProgress.hide(), clears updatingAll) instead of wedging
+									// all future syncs like Looper.loop() did.
+									updatesFailed += dialogMsg +" ";
+									break;
 								}
 								updatePosterThumb(item.getSerieId(), sToUpdate);
 							} catch (Exception e) {

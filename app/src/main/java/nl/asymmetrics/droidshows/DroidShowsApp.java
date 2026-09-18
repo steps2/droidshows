@@ -20,6 +20,39 @@ public class DroidShowsApp extends Application {
 
 	private final Map<Activity, SyncProgress.Listener> bindings = new HashMap<Activity, SyncProgress.Listener>();
 
+	/** Reference-counted tracking of in-flight operations that drive the
+	 *  progress bar. Overlapping syncs (e.g. a per-show update starting while
+	 *  "update all" is still running) used to clobber each other: one
+	 *  operation finishing hid the bar while another was still running.
+	 *  Every beginOperation() must be paired with endOperation(), in a
+	 *  finally block; the bar only hides when the last operation ends.
+	 *  Thread-safe. */
+	private static final Object OP_LOCK = new Object();
+	private static int activeOperations = 0;
+
+	/** Mark the start of an operation that drives the progress bar. The bar
+	 *  is shown (with the first operation's parameters while several
+	 *  overlap) and stays visible until the last active operation ends. */
+	public static void beginOperation(boolean indeterminate, int max) {
+		synchronized (OP_LOCK) {
+			if (activeOperations == 0)
+				SyncProgress.show(indeterminate, max);
+			activeOperations++;
+		}
+	}
+
+	/** Mark the end of an operation started with beginOperation(). Hides the
+	 *  bar only when no operations remain in flight. Safe to call when no
+	 *  operation is active. */
+	public static void endOperation() {
+		synchronized (OP_LOCK) {
+			if (activeOperations > 0)
+				activeOperations--;
+			if (activeOperations == 0)
+				SyncProgress.hide();
+		}
+	}
+
 	@Override
 	public void onCreate() {
 		super.onCreate();
