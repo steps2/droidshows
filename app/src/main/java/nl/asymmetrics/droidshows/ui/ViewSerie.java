@@ -157,7 +157,9 @@ public class ViewSerie extends Activity
 			if (firstAired != null && !firstAired.equals("null") && !firstAired.equals("")) {
 				TextView firstAiredV = (TextView) findViewById(R.id.firstAired);
 				try {
-					Date epDate = SQLiteStore.dateFormat.parse(firstAired);
+					// dateFormat is shared across threads: parse under its lock.
+					Date epDate;
+					synchronized (SQLiteStore.dateFormat) { epDate = SQLiteStore.dateFormat.parse(firstAired); }
 					firstAired = SimpleDateFormat.getDateInstance().format(epDate);
 				} catch (ParseException e) {
 					Log.e(SQLiteStore.TAG, e.getMessage());

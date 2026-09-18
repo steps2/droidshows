@@ -301,7 +301,7 @@ public class Serie {
                            +"',"+ DatabaseUtils.sqlEscapeString(this.serieName) +",'"+ this.banner
                            +"',"+ DatabaseUtils.sqlEscapeString(this.overview) +",'"+ this.firstAired
                            +"','"+ this.imdbId +"','"+ this.zap2ItId +"','"+ this.airsDayOfWeek +"','"+ this.airsTime
-                           +"','"+ this.contentRating +"','"+ this.network +"','"+ this.rating +"','"+ this.runtime
+                           +"','"+ this.contentRating +"',"+ DatabaseUtils.sqlEscapeString(this.network) +",'"+ this.rating +"','"+ this.runtime
                            +"','"+ this.status +"','"+ this.fanart +"','"+ this.lastUpdated +"','"+ this.poster
                            +"','"+ this.posterInCache +"','"+ this.posterThumb +"', '"+ this.passiveStatus
                            +"','"+ this.mediaType +"','"+ this.tvmazeId +"');");

@@ -80,7 +80,8 @@ public class ViewEpisode extends Activity
 			String firstAired = c.getString(airedCol);
 			if (firstAired != null && !firstAired.equals("") && !firstAired.equals("null")) {
 				try {
-					epDate = SQLiteStore.dateFormat.parse(firstAired);
+					// dateFormat is shared across threads: parse under its lock.
+					synchronized (SQLiteStore.dateFormat) { epDate = SQLiteStore.dateFormat.parse(firstAired); }
 					firstAired = SimpleDateFormat.getDateInstance().format(epDate);
 				} catch (ParseException e) {
 					Log.e(SQLiteStore.TAG, e.getMessage());

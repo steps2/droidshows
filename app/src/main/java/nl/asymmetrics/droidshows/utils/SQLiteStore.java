@@ -35,9 +35,9 @@ public class SQLiteStore extends SQLiteOpenHelper
 	private static String DB_PATH = "";
 	private static String DB_NAME = "DroidShows.db";
 	private SQLiteDatabase db;
-	private static String today = dateFormat.format(Calendar.getInstance().getTime());	// Get today's date;
+	private static volatile String today = dateFormat.format(Calendar.getInstance().getTime());	// Get today's date;
 
-	public static SQLiteStore getInstance(Context context) {
+	public static synchronized SQLiteStore getInstance(Context context) {
 		if (instance == null)
 			instance = new SQLiteStore(context.getApplicationContext());
 		return instance;
@@ -115,6 +115,14 @@ public class SQLiteStore extends SQLiteOpenHelper
 		return true;
 	}
 
+	/* Same as execQuery, but throws instead of swallowing the error: use this
+	 * for statements inside a transaction, so a failed INSERT aborts the whole
+	 * transaction instead of committing a half-written show. */
+	private void execQueryOrThrow(String query) {
+		ensureOpen();
+		db.execSQL(query);
+	}
+
 	public Cursor Query(String query) {
 		Cursor c = null;
 		ensureOpen();
@@ -169,7 +177,8 @@ public class SQLiteStore extends SQLiteOpenHelper
 			nextEpisode = tmpNextEpisode;
 		if (!TextUtils.isEmpty(tmpNextAir) && !tmpNextAir.equals("null")) {
 			try {
-				nextAir = SQLiteStore.dateFormat.parse(tmpNextAir);
+				// dateFormat is shared across threads: parse under its lock.
+				synchronized (SQLiteStore.dateFormat) { nextAir = SQLiteStore.dateFormat.parse(tmpNextAir); }
 			} catch (ParseException e) {
 				e.printStackTrace();
 			}
@@ -365,6 +374,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		String serieId = "", episodeId = "", episodeName = "";
 		long seen;
 		int seasonNumber = -1, episodeNumber = -1;
+		if (offset < 0) offset = 0;	// a negative OFFSET is a SQL error, not an empty page
 		Cursor c = Query("SELECT episodes.serieId, episodes.id, episodes.seasonNumber, episodes.episodeNumber, episodes.episodeName, episodes.seen"
 								+" FROM episodes JOIN series ON episodes.serieId = series.id WHERE episodes.seen>1"
 								+ (mediaType < 2 ? " AND series.mediaType="+ mediaType : "")
@@ -377,7 +387,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 				seasonNumber = c.getInt(c.getColumnIndex("seasonNumber"));
 				episodeNumber = c.getInt(c.getColumnIndex("episodeNumber"));
 				episodeName = c.getString(c.getColumnIndex("episodeName"));
-				seen = c.getInt(c.getColumnIndex("seen"));
+				seen = c.getLong(c.getColumnIndex("seen"));
 		
 				TVShowItem episode = createTVShowItem(serieId);
 
@@ -421,12 +431,13 @@ public class SQLiteStore extends SQLiteOpenHelper
 					Date airedDate = null;
 					if (!TextUtils.isEmpty(aired) && !aired.equals("null")) {
 							try { 
-								airedDate = dateFormat.parse(aired);
+								// dateFormat is shared across threads: parse under its lock.
+								synchronized (SQLiteStore.dateFormat) { airedDate = dateFormat.parse(aired); }
 								aired = SimpleDateFormat.getDateInstance().format(airedDate);
 							} catch (ParseException e) { e.printStackTrace(); }
 					} else
 						aired = "";
-					long seen = c.getInt(c.getColumnIndex("seen"));
+					long seen = c.getLong(c.getColumnIndex("seen"));
 					
 					episodes.add(new EpisodeRow(id, name, aired, airedDate, seen));
 				} while (c.moveToNext());
@@ -446,7 +457,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		try {
 			if (c != null && c.moveToFirst()) {
 				do {
-					episodesSeen.add(new EpisodeSeen(c.getInt(0) +"x"+ c.getInt(1), c.getInt(2)));
+					episodesSeen.add(new EpisodeSeen(c.getInt(0) +"x"+ c.getInt(1), c.getLong(2)));
 				} while (c.moveToNext());
 			}
 		} catch (SQLiteException e) {
@@ -465,14 +476,15 @@ public class SQLiteStore extends SQLiteOpenHelper
 			db.beginTransaction();
 			if (c != null && c.moveToFirst()) {
 				do {
-					episodesSeen.add(new EpisodeSeen(c.getString(0), c.getInt(1)));
+					episodesSeen.add(new EpisodeSeen(c.getString(0), c.getLong(1)));
 				} while (c.moveToNext());
 			}
 			Date seenTimestamp;
 			for (EpisodeSeen ep : episodesSeen) {
 				if (ep.seen > 1) {
 					try {
-						seenTimestamp = SQLiteStore.dateFormatSeen.parse(""+ ep.seen);
+						// dateFormatSeen is shared across threads: parse under its lock.
+						synchronized (SQLiteStore.dateFormatSeen) { seenTimestamp = SQLiteStore.dateFormatSeen.parse(""+ ep.seen); }
 						long seen = seenTimestamp.getTime() / 1000;
 //						Log.d(TAG, "Converting seen from\n"+ ep.seen +" to\n"+ SQLiteStore.dateFormatSeen.format(new Date(seen * 1000))  +"(db-value ="+ seen +")");
 						execQuery("UPDATE episodes SET seen ="+ seen +" WHERE id='"+ ep.episode +"'");
@@ -790,7 +802,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 		try {
 			c = Query("SELECT seen, seasonNumber, episodeNumber FROM episodes WHERE serieId='"+ serieId+"' AND id='"+ episodeId +"'");
 			if (c != null && c.moveToFirst()) {
-				long seen = c.getInt(0);
+				long seen = c.getLong(0);
 				int season = c.getInt(1);
 				int episode = c.getInt(2);
 				episodeMarked =  season + (episode < 10 ? "x0" : "x") + episode;
@@ -894,22 +906,22 @@ public class SQLiteStore extends SQLiteOpenHelper
 				+", overview="+ DatabaseUtils.sqlEscapeString(tmpSOverview) +", "+"firstAired='"+ s.getFirstAired()
 				+"', imdbId='"+ s.getImdbId() +"', zap2ItId='"+ s.getZap2ItId()
 				+"', airsDayOfWeek='"+ s.getAirsDayOfWeek() +"', airsTime='"+ s.getAirsTime()
-				+"', contentRating='"+ s.getContentRating() +"', "+"network='"+ s.getNetwork()
-				+"', rating='"+ s.getRating() +"', runtime='"+ s.getRuntime() +"', "+"status='"
+				+"', contentRating='"+ s.getContentRating() +"', "+"network="+ DatabaseUtils.sqlEscapeString(s.getNetwork())
+				+", rating='"+ s.getRating() +"', runtime='"+ s.getRuntime() +"', "+"status='"
 				+ s.getStatus() +"', lastUpdated='"+ s.getLastUpdated() +"' WHERE id='"+ s.getId() +"'");
 			db.execSQL("DELETE FROM serie_seasons WHERE serieId='"+ s.getId() +"'");
 			for (int n = 0; n < s.getNSeasons().size(); n++) {
-				execQuery("INSERT INTO serie_seasons (serieId, season) "+"VALUES ('"+ s.getId() +"', '"
+				execQueryOrThrow("INSERT INTO serie_seasons (serieId, season) "+"VALUES ('"+ s.getId() +"', '"
 					+ s.getNSeasons().get(n) +"');");
 			}
 			db.execSQL("DELETE FROM actors WHERE serieId='"+ s.getId() +"'");
 			for (int a = 0; a < s.getActors().size(); a++) {
-				execQuery("INSERT INTO actors (serieId, actor) "+"VALUES ('"+ s.getId()
+				execQueryOrThrow("INSERT INTO actors (serieId, actor) "+"VALUES ('"+ s.getId()
 				+"',"+ DatabaseUtils.sqlEscapeString(s.getActors().get(a)) +");");
 			}
 			db.execSQL("DELETE FROM genres WHERE serieId='"+ s.getId() +"'");
 			for (int g = 0; g < s.getGenres().size(); g++) {
-				execQuery("INSERT INTO genres (serieId, genre) "+"VALUES ('"+ s.getId()
+				execQueryOrThrow("INSERT INTO genres (serieId, genre) "+"VALUES ('"+ s.getId()
 				+"',"+ DatabaseUtils.sqlEscapeString(s.getGenres().get(g)) +");");
 			}
 			
@@ -954,17 +966,17 @@ public class SQLiteStore extends SQLiteOpenHelper
 				}
 								
 				for (int d = 0; d < ep.getDirectors().size(); d++) {
-					execQuery("INSERT INTO directors (serieId, episodeId, director) "+"VALUES ('"
+					execQueryOrThrow("INSERT INTO directors (serieId, episodeId, director) "+"VALUES ('"
 						+ s.getId() +"', '"+ ep.getId()
 						+"',"+ DatabaseUtils.sqlEscapeString(ep.getDirectors().get(d)) +");");
 				}
 				for (int g = 0; g < ep.getGuestStars().size(); g++) {
-					execQuery("INSERT INTO guestStars (serieId, episodeId, guestStar) "+"VALUES ('"
+					execQueryOrThrow("INSERT INTO guestStars (serieId, episodeId, guestStar) "+"VALUES ('"
 						+ s.getId() +"', '"+ ep.getId()
 						+"',"+ DatabaseUtils.sqlEscapeString(ep.getGuestStars().get(g)) +");");
 				}
 				for (int w = 0; w < ep.getWriters().size(); w++) {
-					execQuery("INSERT INTO writers (serieId, episodeId, writer) "+"VALUES ('"+ s.getId()
+					execQueryOrThrow("INSERT INTO writers (serieId, episodeId, writer) "+"VALUES ('"+ s.getId()
 						+"', '"+ ep.getId()
 						+"',"+ DatabaseUtils.sqlEscapeString(ep.getWriters().get(w)) +");");
 				}
@@ -991,7 +1003,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 				}
 								
 				if (!tmpName.equals("")) {
-					execQuery("INSERT INTO episodes (serieId, id, combinedEpisodeNumber, combinedSeason, "
+					execQueryOrThrow("INSERT INTO episodes (serieId, id, combinedEpisodeNumber, combinedSeason, "
 						+"dvdChapter, dvdDiscId, dvdEpisodeNumber, dvdSeason, epImgFlag, episodeName, "
 						+"episodeNumber, firstAired, imdbId, language, overview, productionCode, rating, seasonNumber, "
 						+"absoluteNumber, filename, lastUpdated, seasonId, seen) VALUES ('"
@@ -1007,7 +1019,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 						+"', '"
 						+ ep.getDvdDiscId()
 						+"', '"
-						+ ep.getEpisodeNumber()
+						+ ep.getDvdEpisodeNumber()
 						+"', '"
 						+ ep.getDvdSeason()
 						+"', '"
@@ -1045,7 +1057,9 @@ public class SQLiteStore extends SQLiteOpenHelper
 			Log.e(TAG, e.getMessage());
 			return false;
 		} finally {
-			db.endTransaction();
+			// Never leave the transaction open, and never let a failure here
+			// (e.g. the DB was closed mid-update) mask the real error.
+			try { db.endTransaction(); } catch (Exception e) { Log.e(TAG, "Could not end transaction", e); }
 		}
 		updateShowStats(s.getId());
 		return true;
@@ -1152,7 +1166,11 @@ public class SQLiteStore extends SQLiteOpenHelper
 
 	@Override
 	public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-		// TODO Auto-generated method stub
+		// Intentionally empty: this helper is always constructed with version 1,
+		// so the framework never calls onUpgrade. Schema migrations are handled
+		// by Update.java, which tracks the schema in the droidseries table and
+		// walks every step (u0156To0157 ... u0157G3To0157G4). Do not add migration
+		// logic here — it would run in addition to Update.java and corrupt data.
 	}
 	
 	public void updateShowStats() {
