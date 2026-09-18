@@ -518,7 +518,7 @@ public class DiscoverActivity extends AppCompatActivity {
 		if (poster == null || poster.isEmpty()) return;
 		try {
 			URL url = new URL(poster);
-			File f = Utils.posterFile(this, url);
+			File f = nl.asymmetrics.droidshows.utils.Utils.posterFile(this, url);
 			if (!f.exists()) {
 				f.getParentFile().mkdirs();
 				nl.asymmetrics.droidshows.utils.Utils.downloadPosterThumb(this, url, f);
@@ -548,7 +548,7 @@ public class DiscoverActivity extends AppCompatActivity {
 				Bitmap bmp = null;
 				try {
 					URL u = new URL(url);
-					File f = Utils.posterFile(DiscoverActivity.this, u);
+					File f = nl.asymmetrics.droidshows.utils.Utils.posterFile(DiscoverActivity.this, u);
 					if (!f.exists()) {
 						f.getParentFile().mkdirs();
 						nl.asymmetrics.droidshows.utils.Utils.downloadPosterThumb(DiscoverActivity.this, u, f);
