@@ -86,6 +86,7 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.animation.OvershootInterpolator;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewParent;
@@ -307,6 +308,7 @@ public class DroidShows extends AppCompatActivity
 		setupDrawer();
 		float swipeDensity = getApplicationContext().getResources().getDisplayMetrics().density;
 		swipeActionWidthPx = (int) (96 * swipeDensity + 0.5f);
+		tabSwitchDistancePx = swipeActionWidthPx * 2;	// keep swiping past the actions to switch tab
 		swipeTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
 		setupToolbar();
 		showLastCrashIfAny();
@@ -1745,18 +1747,24 @@ public class DroidShows extends AppCompatActivity
 		fg.animate().translationX(translationX).setDuration(180).start();
 	}
 
-	private void closeOpenSwipeRow() {
-		if (openSwipeRow != null) {
-			final View v = openSwipeRow;
+	/* Spring the card back to its resting position, with a little bounce. */
+	private void snapRowClosed(final View fg) {
+		if (openSwipeRow == fg)
 			openSwipeRow = null;
-			v.animate().translationX(0).setDuration(180).withEndAction(new Runnable() {
-				public void run() {
-					View actions = ((View) v.getParent()).findViewById(R.id.row_actions);
-					if (actions != null)
-						actions.setVisibility(View.GONE);
-				}
-			}).start();
-		}
+		fg.animate().translationX(0).setDuration(200)
+				.setInterpolator(new OvershootInterpolator(1.0f))
+				.withEndAction(new Runnable() {
+					public void run() {
+						View actions = ((View) fg.getParent()).findViewById(R.id.row_actions);
+						if (actions != null)
+							actions.setVisibility(View.GONE);
+					}
+				}).start();
+	}
+
+	private void closeOpenSwipeRow() {
+		if (openSwipeRow != null)
+			snapRowClosed(openSwipeRow);
 	}
 
 	/* Shared row-swipe driver (beta 34): swipe detection lives at ListView
@@ -1769,6 +1777,8 @@ public class DroidShows extends AppCompatActivity
 	private boolean swipeRowCanWatch = false;
 	private float swipeDownX, swipeDownY, swipeStartTx;
 	private boolean swipeDragging = false;
+	private int tabSwitchDistancePx;
+	private boolean tabSwitchedThisGesture = false;
 
 	private void beginRowSwipe(View fg, boolean canWatch, float downX, float downY) {
 		if (openSwipeRow != null && openSwipeRow != fg)
@@ -1797,11 +1807,28 @@ public class DroidShows extends AppCompatActivity
 			float tx = swipeStartTx + dx;
 			if (tx > 0 && !swipeRowCanWatch)
 				tx = 0;	// no watched action available for this row
-			if (tx > swipeActionWidthPx)
-				tx = swipeActionWidthPx;
-			else if (tx < -swipeActionWidthPx)
-				tx = -swipeActionWidthPx;
+			if (tx > tabSwitchDistancePx)
+				tx = tabSwitchDistancePx;
+			else if (tx < -tabSwitchDistancePx)
+				tx = -tabSwitchDistancePx;
 			swipeRowFg.setTranslationX(tx);
+			if (Math.abs(tx) >= tabSwitchDistancePx) {
+				/* Kept swiping past the actions: switch tab instead of parking.
+				 * Same direction as the tab strip: left goes to the next tab. */
+				int dir = tx < 0 ? 1 : -1;
+				View fg = swipeRowFg;
+				swipeRowFg = null;
+				swipeDragging = false;
+				tabSwitchedThisGesture = true;
+				listView.requestDisallowInterceptTouchEvent(false);
+				fg.setTranslationX(0);
+				if (openSwipeRow == fg)
+					openSwipeRow = null;
+				View actions = ((View) fg.getParent()).findViewById(R.id.row_actions);
+				if (actions != null)
+					actions.setVisibility(View.GONE);
+				cycleTab(dir);
+			}
 			return true;
 		}
 		return false;
@@ -1823,7 +1850,7 @@ public class DroidShows extends AppCompatActivity
 			else if (tx < -swipeActionWidthPx / 2)
 				parkOpenRow(fg, -swipeActionWidthPx);
 			else
-				closeOpenSwipeRow();
+				snapRowClosed(fg);	// released early: bounce back, don't stick mid-drag
 			return true;
 		}
 		if (openSwipeRow == fg) {
@@ -1856,6 +1883,7 @@ public class DroidShows extends AppCompatActivity
 		public boolean onTouch(View v, MotionEvent event) {
 			switch (event.getActionMasked()) {
 				case MotionEvent.ACTION_DOWN: {
+					tabSwitchedThisGesture = false;
 					int pos = listView.pointToPosition((int) event.getX(), (int) event.getY());
 					if (pos != ListView.INVALID_POSITION) {
 						View row = listView.getChildAt(pos - listView.getFirstVisiblePosition());
@@ -1876,11 +1904,15 @@ public class DroidShows extends AppCompatActivity
 					if (moveRowSwipe(event.getX(), event.getY()))
 						return true;
 					break;
-				case MotionEvent.ACTION_UP:
-					if (endRowSwipe())
+				case MotionEvent.ACTION_UP: {
+					boolean consume = tabSwitchedThisGesture || endRowSwipe();
+					tabSwitchedThisGesture = false;
+					if (consume)
 						return true;
 					break;
+				}
 				case MotionEvent.ACTION_CANCEL:
+					tabSwitchedThisGesture = false;
 					cancelRowSwipe();
 					break;
 			}
@@ -3020,6 +3052,7 @@ public class DroidShows extends AppCompatActivity
 				int action = event.getActionMasked();
 				boolean swipeConsumed = false;
 				if (action == MotionEvent.ACTION_DOWN) {
+					tabSwitchedThisGesture = false;
 					View fg = findRowForeground(v);
 					if (fg != null) {
 						int pos = listView.getPositionForView(v);
@@ -3031,8 +3064,10 @@ public class DroidShows extends AppCompatActivity
 				} else if (action == MotionEvent.ACTION_MOVE) {
 					swipeConsumed = moveRowSwipe(event.getX(), event.getY());
 				} else if (action == MotionEvent.ACTION_UP) {
-					swipeConsumed = endRowSwipe();
+					swipeConsumed = tabSwitchedThisGesture || endRowSwipe();
+					tabSwitchedThisGesture = false;
 				} else if (action == MotionEvent.ACTION_CANCEL) {
+					tabSwitchedThisGesture = false;
 					cancelRowSwipe();
 				}
 				if (!swipeConsumed) {
