@@ -1,17 +1,43 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:aapt="http://schemas.android.com/aapt"
-        android:width="108dp"
-        android:height="108dp"
-        android:viewportWidth="63.157894"
-        android:viewportHeight="63.157894">
-    <group android:translateX="7.5789475"
-            android:translateY="7.5789475">
-        <path
-            android:pathData="m33.02,14.37c1.24,0 2.26,1 2.26,2.26v7.33L33.02,23.95L33.02,16.62L12.72,16.62L12.72,30.16L29.07,30.16L29.07,32.41L12.72,32.41c-1.24,0 -2.26,-1.01 -2.26,-2.26L10.47,16.62c0,-1.25 1.01,-2.26 2.26,-2.26h5.68c0.35,-0.52 0.78,-0.97 1.28,-1.34l-1.18,-1.18c-0.18,-0.18 -0.18,-0.46 0,-0.64 0.09,-0.09 0.2,-0.14 0.32,-0.14 0.11,0 0.23,0.05 0.32,0.14l1.34,1.33c0.72,-0.36 1.53,-0.57 2.39,-0.57 0.85,0 1.67,0.21 2.38,0.57l1.33,-1.33c0.18,-0.18 0.46,-0.18 0.64,0 0.18,0.18 0.18,0.46 0,0.64l-1.17,1.17c0.51,0.37 0.95,0.83 1.3,1.35zM27.38,23.39c0,2.49 -2.02,4.51 -4.51,4.51 -2.49,0 -4.51,-2.02 -4.51,-4.51 0,-2.49 2.02,-4.51 4.51,-4.51 2.49,0 4.51,2.02 4.51,4.51zM24.68,23.39 L21.97,21.36v4.06zM37.53,26.21v9.02c0,0.94 -0.76,1.69 -1.69,1.69h-4.51c-0.94,0 -1.69,-0.76 -1.69,-1.69v-9.02c0,-0.94 0.76,-1.69 1.69,-1.69h4.51c0.94,0 1.69,0.76 1.69,1.69zM34.71,35.23h-2.26v0.56h2.26zM36.54,26.21h-5.92v7.89h5.92zM34.15,28.95v0.81L31.33,29.75v-0.81zM35.84,27.34v0.81h-4.51v-0.81zM35.25,29.55 L35.84,30.16 33.09,32.97 31.33,31.16 31.92,30.56 33.09,31.77zM20.19,15.58h0.9v-0.9h-0.9zM24.69,15.58h0.9v-0.9h-0.9z"
-            android:strokeLineCap="butt"
-            android:fillType="nonZero"
-            android:fillColor="#ffffff"
-            android:strokeWidth="0"
-            android:strokeLineJoin="miter"/>
-    </group>
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Flat-screen TV -->
+    <path
+        android:pathData="M32,34 H76 A7,7 0 0 1 83,41 V65 A7,7 0 0 1 76,72 H32 A7,7 0 0 1 25,65 V41 A7,7 0 0 1 32,34 Z"
+        android:fillColor="#ffffff" />
+    <path
+        android:pathData="M34,39.5 H74 A3.5,3.5 0 0 1 77.5,43 V63 A3.5,3.5 0 0 1 74,66.5 H34 A3.5,3.5 0 0 1 30.5,63 V43 A3.5,3.5 0 0 1 34,39.5 Z"
+        android:fillColor="@color/iconbg" />
+    <path
+        android:pathData="M49,45.5 L49,61.5 L63.5,53.5 Z"
+        android:fillColor="#ffffff" />
+    <path
+        android:pathData="M50,72 h8 v7 h-8 z"
+        android:fillColor="#ffffff" />
+    <path
+        android:pathData="M43.25,79 H64.75 A2.25,2.25 0 0 1 67,81.25 V81.25 A2.25,2.25 0 0 1 64.75,83.5 H43.25 A2.25,2.25 0 0 1 41,81.25 V81.25 A2.25,2.25 0 0 1 43.25,79 Z"
+        android:fillColor="#ffffff" />
+    <!-- Red watchlist card -->
+    <path
+        android:pathData="M76,56 H87 A4,4 0 0 1 91,60 V79 A4,4 0 0 1 87,83 H76 A4,4 0 0 1 72,79 V60 A4,4 0 0 1 76,56 Z"
+        android:fillColor="#e53935" />
+    <path
+        android:pathData="M76,62 H87"
+        android:strokeColor="#ffffff"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M76,66.5 H87"
+        android:strokeColor="#ffffff"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M77,71.5 L80,74.5 L86.5,66.5"
+        android:strokeColor="#ffffff"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
 </vector>
