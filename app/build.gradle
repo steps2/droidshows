@@ -10,7 +10,7 @@ android {
 
         // versionCode 71110     // original andoid 2.3 api 9 version
         // versionName "7.11.10" // original andoid 2.3 api 9 version
-        versionCode 141214       // beta 29: new app icon
+        versionCode 141215       // beta 30: icon scaled to fit safe area
         versionName "14.12.00"   // migrated android 4.0 api 14 version
 
         vectorDrawables.useSupportLibrary = true
