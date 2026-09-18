@@ -56,8 +56,6 @@ public class SerieEpisodes extends AppCompatActivity {
 	private static final int SEENTIMESTAMP_CONTEXT = Menu.FIRST + 1;
 	private static final int DELEP_CONTEXT = SEENTIMESTAMP_CONTEXT + 1;
 
-	private nl.asymmetrics.droidshows.TopProgressBinder progressBinder;
-
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
@@ -65,7 +63,6 @@ public class SerieEpisodes extends AppCompatActivity {
 		this.overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.serie_episodes);
-		progressBinder = new nl.asymmetrics.droidshows.TopProgressBinder(this);
 		listView = (ListView) findViewById(android.R.id.list);
 		View emptyView = findViewById(android.R.id.empty);
 		if (emptyView != null) listView.setEmptyView(emptyView);
@@ -303,17 +300,5 @@ public class SerieEpisodes extends AppCompatActivity {
 			episodesAdapter.notifyDataSetChanged();
 			backFromEpisode = -1;
 		}
-	}
-
-	@Override
-	protected void onResume() {
-		super.onResume();
-		if (progressBinder != null) progressBinder.onResume();
-	}
-
-	@Override
-	protected void onPause() {
-		if (progressBinder != null) progressBinder.onPause();
-		super.onPause();
 	}
 }

@@ -47,8 +47,6 @@ public class ViewSerie extends Activity
 	private boolean isMovie = false;
 	private String movieEpisodeId = null;
 	
-	private nl.asymmetrics.droidshows.TopProgressBinder progressBinder;
-
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		// Apply the saved theme (plus Material You dynamic colors) before the window is created.
@@ -56,7 +54,6 @@ public class ViewSerie extends Activity
 		this.overridePendingTransition(R.anim.left_enter, R.anim.left_exit);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.view_serie);
-		progressBinder = new nl.asymmetrics.droidshows.TopProgressBinder(this);
 		db = SQLiteStore.getInstance(this);
 		View view = findViewById(R.id.viewSerie);
 		view.setOnTouchListener(swipeDetect);
@@ -342,17 +339,5 @@ public class ViewSerie extends Activity
 			super.onBackPressed();
 			overridePendingTransition(R.anim.right_enter, R.anim.right_exit);
 		}
-	}
-
-	@Override
-	protected void onResume() {
-		super.onResume();
-		if (progressBinder != null) progressBinder.onResume();
-	}
-
-	@Override
-	protected void onPause() {
-		if (progressBinder != null) progressBinder.onPause();
-		super.onPause();
 	}
 }

@@ -91,7 +91,7 @@ public class DiscoverActivity extends AppCompatActivity {
 			public void onTabReselected(TabLayout.Tab t) {}
 		});
 
-		topProgress = (LinearProgressIndicator) findViewById(R.id.top_progress);
+		topProgress = (LinearProgressIndicator) findViewById(R.id.discover_progress);
 		listView = (ListView) findViewById(android.R.id.list);
 		emptyView = (TextView) findViewById(android.R.id.empty);
 		listView.setEmptyView(emptyView);
@@ -103,6 +103,11 @@ public class DiscoverActivity extends AppCompatActivity {
 				if (loadingMore || totalCount == 0) return;
 				boolean more = tab == 0 ? tvMore : movieMore;
 				if (more && firstVisible + visibleCount >= totalCount - 4) loadMore();
+			}
+		});
+		listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+				showDetails(adapter.getItem(position));
 			}
 		});
 		listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
@@ -126,6 +131,49 @@ public class DiscoverActivity extends AppCompatActivity {
 
 	private void refreshList() {
 		adapter.setItems(tab == 0 ? shows : movies);
+	}
+
+	/** Tap a row: details dialog with the synopsis and an Add button.
+	 *  (Press-and-hold keeps the Add menu too.) */
+	private void showDetails(final Serie item) {
+		if (item == null) return;
+		View v = LayoutInflater.from(this).inflate(R.layout.dialog_discover_details, null);
+		ImageView poster = (ImageView) v.findViewById(R.id.details_poster);
+		((TextView) v.findViewById(R.id.details_name)).setText(item.getSerieName());
+		((TextView) v.findViewById(R.id.details_meta)).setText(metaLine(item));
+		String syn = item.getOverview();
+		if (syn == null || syn.trim().isEmpty()) syn = getString(R.string.discover_no_synopsis);
+		((TextView) v.findViewById(R.id.details_synopsis)).setText(syn.trim());
+		loadPosterInto(poster, item);
+		new MaterialAlertDialogBuilder(this)
+			.setView(v)
+			.setPositiveButton(R.string.discover_add,
+				new android.content.DialogInterface.OnClickListener() {
+					public void onClick(android.content.DialogInterface dialog, int which) {
+						addItem(item);
+					}
+				})
+			.setNegativeButton(android.R.string.cancel, null)
+			.show();
+	}
+
+	private static String metaLine(Serie o) {
+		StringBuilder sb = new StringBuilder();
+		if (o.getMediaType() == 1) {
+			sb.append(yearOf(o.getFirstAired()));
+		} else {
+			if (o.getNetwork() != null && !o.getNetwork().isEmpty()) sb.append(o.getNetwork());
+			String y = yearOf(o.getFirstAired());
+			if (!y.isEmpty()) {
+				if (sb.length() > 0) sb.append(" · ");
+				sb.append(y);
+			}
+		}
+		return sb.toString();
+	}
+
+	private static String yearOf(String date) {
+		return (date != null && date.length() >= 4) ? date.substring(0, 4) : "";
 	}
 
 	private void showTop(final boolean show) {
@@ -511,25 +559,6 @@ public class DiscoverActivity extends AppCompatActivity {
 				});
 			}
 			return v;
-		}
-
-		private String metaLine(Serie o) {
-			StringBuilder sb = new StringBuilder();
-			if (o.getMediaType() == 1) {
-				sb.append(yearOf(o.getFirstAired()));
-			} else {
-				if (o.getNetwork() != null && !o.getNetwork().isEmpty()) sb.append(o.getNetwork());
-				String y = yearOf(o.getFirstAired());
-				if (!y.isEmpty()) {
-					if (sb.length() > 0) sb.append(" · ");
-					sb.append(y);
-				}
-			}
-			return sb.toString();
-		}
-
-		private String yearOf(String date) {
-			return (date != null && date.length() >= 4) ? date.substring(0, 4) : "";
 		}
 	}
 }

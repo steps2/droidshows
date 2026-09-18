@@ -178,7 +178,6 @@ public class DroidShows extends AppCompatActivity
 	private static final int SYNOPSIS_LANGUAGE = UPDATE_CONTEXT + 1;
 	private static final int DELETE_CONTEXT = SYNOPSIS_LANGUAGE + 1;
 	private static AlertDialog m_AlertDlg;
-	private TopProgressBinder progressBinder = null;
 	private volatile int updateAllDone = 0;
 	private boolean swipeTriggered = false;	// kept for the update dialog logic; the pull gesture is removed
 	private volatile boolean updatingAll = false;
@@ -268,7 +267,6 @@ public class DroidShows extends AppCompatActivity
 			}
 		}
 		setContentView(R.layout.main);
-		progressBinder = new TopProgressBinder(this);
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
 		if (savedInstanceState != null) {
@@ -2104,7 +2102,6 @@ public class DroidShows extends AppCompatActivity
 
 	@Override
 	public void onPause() {
-		if (progressBinder != null) progressBinder.onPause();
 		super.onPause();
 		SharedPreferences.Editor ed = sharedPrefs.edit();
 		ed.putBoolean(AUTO_BACKUP_PREF_NAME, autoBackup);
@@ -2158,7 +2155,6 @@ public class DroidShows extends AppCompatActivity
 	@Override
 	public void onResume() {
 		super.onResume();
-		if (progressBinder != null) progressBinder.onResume();
 		if (searchV.getText().length() > 0) {
 			findViewById(R.id.search).setVisibility(View.VISIBLE);
 			listView.requestFocus();
@@ -2257,7 +2253,6 @@ public class DroidShows extends AppCompatActivity
 		outState.putBoolean("searching", searching());
 		outState.putInt("showArchive", showArchive);
 		outState.putInt("mediaType", mediaType);
-		hideTopProgress();
 		super.onSaveInstanceState(outState);
 	}
 

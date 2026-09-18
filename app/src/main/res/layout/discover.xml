@@ -9,7 +9,7 @@
 			<com.google.android.material.tabs.TabItem android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_movies"/>
 		</com.google.android.material.tabs.TabLayout>
 	</com.google.android.material.appbar.AppBarLayout>
-	<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/top_progress" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"/>
+	<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/discover_progress" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"/>
 	<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
 		<ListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
 		<TextView android:id="@+id/android:empty" android:layout_width="fill_parent" android:layout_height="fill_parent" android:gravity="center" android:padding="16dp" android:text="@string/discover_empty"/>

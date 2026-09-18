@@ -59,7 +59,7 @@ public class AddSerie extends AppCompatActivity
 	/* Non-intrusive progress: a thin bar at the top of the list; the screen stays usable. */
 	private void showProgress(int titleRes, int msgRes, boolean cancelable) {
 		runOnUiThread(new Runnable() { public void run() {
-			View bar = findViewById(R.id.top_progress);
+			View bar = findViewById(R.id.add_progress);
 			if (bar instanceof com.google.android.material.progressindicator.LinearProgressIndicator) {
 				((com.google.android.material.progressindicator.LinearProgressIndicator) bar).setIndeterminate(true);
 				bar.setVisibility(View.VISIBLE);
@@ -69,7 +69,7 @@ public class AddSerie extends AppCompatActivity
 
 	private void dismissProgress() {
 		runOnUiThread(new Runnable() { public void run() {
-			View bar = findViewById(R.id.top_progress);
+			View bar = findViewById(R.id.add_progress);
 			if (bar != null) bar.setVisibility(View.GONE);
 		}});
 	}
