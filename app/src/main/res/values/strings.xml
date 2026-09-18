@@ -25,7 +25,9 @@
 <string name="menu_show_current">Show current</string>
 <string name="menu_exclude_seen">Exclude seen</string>
 <string name="menu_include_seen">Include seen</string>
-<string name="menu_log">Log</string>
+<string name="menu_log">History</string>
+	<string name="swipe_action_watched">Mark watched</string>
+	<string name="swipe_action_delete">Delete</string>
 <string name="menu_close_log">Close log</string>
 <string name="menu_context_view_serie_details">Show details</string>
 <string name="menu_context_view_imdb">IMDb show page</string>

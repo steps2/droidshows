@@ -25,7 +25,7 @@
 <string name="menu_show_current">Afficher les séries actuelles</string>
 <string name="menu_exclude_seen">Exclure les épisodes vus</string>
 <string name="menu_include_seen">Inclure les épisodes vus</string>
-<string name="menu_log">Journal</string>
+<string name="menu_log">Historique</string>
 <string name="menu_close_log">Fermer journal</string>
 <string name="menu_context_view_serie_details">Détails de la série</string>
 <string name="menu_context_view_imdb">page IMDb de la série</string>

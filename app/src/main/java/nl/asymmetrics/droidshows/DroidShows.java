@@ -47,7 +47,6 @@ import nl.asymmetrics.droidshows.ui.SerieSeasons;
 import nl.asymmetrics.droidshows.ui.ViewEpisode;
 import nl.asymmetrics.droidshows.ui.ViewSerie;
 import nl.asymmetrics.droidshows.utils.SQLiteStore;
-import nl.asymmetrics.droidshows.utils.SwipeDetect;
 import nl.asymmetrics.droidshows.utils.Update;
 import nl.asymmetrics.droidshows.utils.Utils;
 import nl.asymmetrics.droidshows.utils.SQLiteStore.NextEpisode;
@@ -88,6 +87,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -239,7 +239,10 @@ public class DroidShows extends AppCompatActivity
 	public static SQLiteStore db;
 	public static List<TVShowItem> series;
 	private static List<String[]> undo = new ArrayList<String[]>();
-	private SwipeDetect swipeDetect = new SwipeDetect();
+	/* Swipe-reveal row actions (beta 33): one open row at a time, tracked here */
+	private View openSwipeRow = null;
+	private int swipeActionWidthPx;
+	private int swipeTouchSlop;
 	private static AsyncInfo asyncInfo;
 	private static EditText searchV;
 	private InputMethodManager keyboard;
@@ -296,6 +299,9 @@ public class DroidShows extends AppCompatActivity
 			mediaType = savedInstanceState.getInt("mediaType", 0);
 		}
 		setupDrawer();
+		float swipeDensity = getApplicationContext().getResources().getDisplayMetrics().density;
+		swipeActionWidthPx = (int) (96 * swipeDensity + 0.5f);
+		swipeTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
 		setupToolbar();
 		showLastCrashIfAny();
 
@@ -366,7 +372,6 @@ public class DroidShows extends AppCompatActivity
 			getSeries();
 		}
 		registerForContextMenu(listView);
-		listView.setOnTouchListener(swipeDetect);
 		searchV = (EditText) findViewById(R.id.search_text);
 		searchV.setFocusable(true);
 		searchV.setFocusableInTouchMode(true);
@@ -420,10 +425,40 @@ public class DroidShows extends AppCompatActivity
 				logMode = position == 2;
 				showArchive = (position == 2 ? showArchive : position);
 				if (logMode) clearFilter(null);
+				closeOpenSwipeRow();
 				getSeries();
 			}
 			public void onTabUnselected(TabLayout.Tab tab) {}
 			public void onTabReselected(TabLayout.Tab tab) {}
+		});
+		/* Swipe sideways on the tab strip to circle through Watching / Finished / History. */
+		modeTabs.setOnTouchListener(new View.OnTouchListener() {
+			private float downX, downY;
+			private boolean armed;
+			public boolean onTouch(View v, MotionEvent event) {
+				switch (event.getActionMasked()) {
+					case MotionEvent.ACTION_DOWN:
+						downX = event.getX();
+						downY = event.getY();
+						armed = true;
+						break;
+					case MotionEvent.ACTION_MOVE:
+						if (armed) {
+							float dx = event.getX() - downX;
+							float dy = event.getY() - downY;
+							if (Math.abs(dx) > swipeTouchSlop && Math.abs(dx) > Math.abs(dy) * 2) {
+								armed = false;
+								cycleTab(dx < 0 ? 1 : -1);
+							}
+						}
+						break;
+					case MotionEvent.ACTION_UP:
+					case MotionEvent.ACTION_CANCEL:
+						armed = false;
+						break;
+				}
+				return false;	// let TabLayout keep handling taps
+			}
 		});
 		drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close);
 		// Hamburger-to-X indicator instead of the stock hamburger-to-arrow (beta-3 behavior preserved).
@@ -1526,49 +1561,57 @@ public class DroidShows extends AppCompatActivity
 				listView.post(updateListView);
 				return true;
 			case DELETE_CONTEXT :
-				asyncInfo.cancel(true);
-				final int position = info.position;
-				final Runnable deleteserie = new Runnable() {
-					public void run() {
-						TVShowItem serie = seriesAdapter.getItem(position);
-						String sname = serie.getName();
-						String toastMsg = getString(R.string.messages_deleted);
-						if (!db.deleteSerie(serieId))
-							toastMsg = serie.getMediaType() == 1 ? getString(R.string.messages_error_dbdelete_movie) : "Database error while deleting show";
-						series.remove(series.indexOf(serie));
-						listView.post(updateListView);
-						final String toastText = sname +" "+ toastMsg;
-						new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
-							public void run() {
-								Toast.makeText(getApplicationContext(), toastText, Toast.LENGTH_LONG).show();
-							}
-						});
-						asyncInfo = new AsyncInfo();
-						asyncInfo.execute();
-					}
-				};
-				AlertDialog.Builder alertDialog = new MaterialAlertDialogBuilder(this)
-					.setTitle(serie.getMediaType() == 1 ? R.string.dialog_title_delete_movie : R.string.dialog_title_delete)
-					.setMessage(String.format(getString(R.string.dialog_delete), serie.getName()))
-					.setIcon(android.R.drawable.ic_dialog_alert)
-					.setCancelable(false)
-					.setPositiveButton(getString(R.string.dialog_ok), new DialogInterface.OnClickListener() {
-						public void onClick(DialogInterface dialog, int which) {
-							deleteTh = new Thread(deleteserie);
-							deleteTh.start();
-							return;
-						}
-					})
-					.setNegativeButton(getString(R.string.dialog_cancel), new DialogInterface.OnClickListener() {
-						public void onClick(DialogInterface dialog, int which) {
-							return;
-						}
-					});
-				alertDialog.show();
+				confirmDeleteShow(info.position);
 				return true;
 			default :
 				return super.onContextItemSelected(item);
 		}
+	}
+
+	/* Delete confirmation shared by the long-press context menu and the swipe-reveal delete button. */
+	private void confirmDeleteShow(final int position) {
+		asyncInfo.cancel(true);
+		final TVShowItem serie = seriesAdapter.getItem(position);
+		if (serie == null)
+			return;
+		final String serieId = serie.getSerieId();
+		final Runnable deleteserie = new Runnable() {
+			public void run() {
+				TVShowItem serie = seriesAdapter.getItem(position);
+				String sname = serie.getName();
+				String toastMsg = getString(R.string.messages_deleted);
+				if (!db.deleteSerie(serieId))
+					toastMsg = serie.getMediaType() == 1 ? getString(R.string.messages_error_dbdelete_movie) : "Database error while deleting show";
+				series.remove(series.indexOf(serie));
+				listView.post(updateListView);
+				final String toastText = sname +" "+ toastMsg;
+				new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+					public void run() {
+						Toast.makeText(getApplicationContext(), toastText, Toast.LENGTH_LONG).show();
+					}
+				});
+				asyncInfo = new AsyncInfo();
+				asyncInfo.execute();
+			}
+		};
+		AlertDialog.Builder alertDialog = new MaterialAlertDialogBuilder(this)
+			.setTitle(serie.getMediaType() == 1 ? R.string.dialog_title_delete_movie : R.string.dialog_title_delete)
+			.setMessage(String.format(getString(R.string.dialog_delete), serie.getName()))
+			.setIcon(android.R.drawable.ic_dialog_alert)
+			.setCancelable(false)
+			.setPositiveButton(getString(R.string.dialog_ok), new DialogInterface.OnClickListener() {
+				public void onClick(DialogInterface dialog, int which) {
+					deleteTh = new Thread(deleteserie);
+					deleteTh.start();
+					return;
+				}
+			})
+			.setNegativeButton(getString(R.string.dialog_cancel), new DialogInterface.OnClickListener() {
+				public void onClick(DialogInterface dialog, int which) {
+					return;
+				}
+			});
+		alertDialog.show();
 	}
 
 	@SuppressLint("NewApi")
@@ -1581,15 +1624,10 @@ public class DroidShows extends AppCompatActivity
 
 	protected void onListItemClick(ListView l, View v, int position, long id) {
 		keyboard.hideSoftInputFromWindow(searchV.getWindowToken(), 0);
-		if (swipeDetect.value == 1 && canMarkNextEpSeen(seriesAdapter.getItem(position))) {
-			vib.vibrate(150);
-			markNextEpSeen(position);
-		} else if (swipeDetect.value == 0) {
-			if (!logMode) {
-				serieSeasons(position);
-			} else {
-				episodeDetails(position);
-			}
+		if (!logMode) {
+			serieSeasons(position);
+		} else {
+			episodeDetails(position);
 		}
 	}
 
@@ -1626,6 +1664,158 @@ public class DroidShows extends AppCompatActivity
 		if (markingSeen)
 			undo.add(new String[] {serieId, episodeId, movie.getName()});
 		updateShowView(movie);
+	}
+
+	/* Wire swipe-reveal actions for one row (beta 33). Called on every bind. */
+	private void bindRowSwipe(final ViewHolder holder, final TVShowItem serie) {
+		if (holder.fg == null)
+			return;
+		if (openSwipeRow == holder.fg)
+			openSwipeRow = null;	// recycled while parked open
+		holder.fg.setTranslationX(0);
+		if (holder.rowActions != null)
+			holder.rowActions.setVisibility(View.GONE);	// hidden until a swipe starts
+		/* The behind-layer measures 0-high inside a wrap_content row: sync it to the card height once laid out. */
+		holder.fg.post(new Runnable() {
+			public void run() {
+				int h = holder.fg.getHeight();
+				if (h > 0 && holder.rowActions != null) {
+					ViewGroup.LayoutParams lp = holder.rowActions.getLayoutParams();
+					if (lp.height != h) {
+						lp.height = h;
+						holder.rowActions.setLayoutParams(lp);
+					}
+				}
+			}
+		});
+		final boolean canWatch = canMarkNextEpSeen(serie);
+		if (holder.actionWatched != null)
+			holder.actionWatched.setVisibility(canWatch ? View.VISIBLE : View.INVISIBLE);
+		holder.fg.setOnTouchListener(new RowSwipeTouchListener(holder.fg, canWatch));
+		if (holder.actionWatched != null) {
+			holder.actionWatched.setOnClickListener(new View.OnClickListener() {
+				public void onClick(View v) {
+					int pos = listView.getPositionForView(holder.fg);
+					closeOpenSwipeRow();
+					if (pos != ListView.INVALID_POSITION) {
+						vib.vibrate(50);
+						markNextEpSeen(pos);
+					}
+				}
+			});
+		}
+		if (holder.actionDelete != null) {
+			holder.actionDelete.setOnClickListener(new View.OnClickListener() {
+				public void onClick(View v) {
+					int pos = listView.getPositionForView(holder.fg);
+					closeOpenSwipeRow();
+					if (pos != ListView.INVALID_POSITION)
+						confirmDeleteShow(pos);
+				}
+			});
+		}
+	}
+
+	private void parkOpenRow(View fg, int translationX) {
+		openSwipeRow = fg;
+		fg.animate().translationX(translationX).setDuration(180).start();
+	}
+
+	private void closeOpenSwipeRow() {
+		if (openSwipeRow != null) {
+			final View v = openSwipeRow;
+			openSwipeRow = null;
+			v.animate().translationX(0).setDuration(180).withEndAction(new Runnable() {
+				public void run() {
+					View actions = ((View) v.getParent()).findViewById(R.id.row_actions);
+					if (actions != null)
+						actions.setVisibility(View.GONE);
+				}
+			}).start();
+		}
+	}
+
+	/* Circle through Watching -> Finished -> History -> Watching. */
+	private void cycleTab(int direction) {
+		TabLayout modeTabs = (TabLayout) findViewById(R.id.mode_tabs);
+		if (modeTabs == null)
+			return;
+		int current = logMode ? 2 : showArchive;
+		int next = (current + direction + 3) % 3;
+		TabLayout.Tab tab = modeTabs.getTabAt(next);
+		if (tab != null)
+			tab.select();
+	}
+
+	/* Swipe a row sideways to reveal its actions. The row parks open until an
+	 * action is tapped, another row is touched, or the tab changes. A plain tap
+	 * still opens the show; a tap on a parked-open row closes it instead. */
+	private class RowSwipeTouchListener implements View.OnTouchListener {
+		private final View fg;
+		private final boolean canWatch;
+		private float downX, downY, startTx;
+		private boolean dragging;
+
+		RowSwipeTouchListener(View fg, boolean canWatch) {
+			this.fg = fg;
+			this.canWatch = canWatch;
+		}
+
+		public boolean onTouch(View v, MotionEvent event) {
+			switch (event.getActionMasked()) {
+				case MotionEvent.ACTION_DOWN:
+					downX = event.getX();
+					downY = event.getY();
+					startTx = fg.getTranslationX();
+					dragging = false;
+					if (openSwipeRow != null && openSwipeRow != fg)
+						closeOpenSwipeRow();
+					break;
+				case MotionEvent.ACTION_MOVE: {
+					float dx = event.getX() - downX;
+					float dy = event.getY() - downY;
+					if (!dragging && Math.abs(dx) > swipeTouchSlop && Math.abs(dx) > Math.abs(dy) * 2) {
+						dragging = true;
+						View actions = ((View) v.getParent()).findViewById(R.id.row_actions);
+						if (actions != null)
+							actions.setVisibility(View.VISIBLE);
+						v.getParent().requestDisallowInterceptTouchEvent(true);
+					}
+					if (dragging) {
+						float tx = startTx + dx;
+						if (tx > 0 && !canWatch)
+							tx = 0;	// no watched action available for this row
+						if (tx > swipeActionWidthPx)
+							tx = swipeActionWidthPx;
+						else if (tx < -swipeActionWidthPx)
+							tx = -swipeActionWidthPx;
+						fg.setTranslationX(tx);
+						return true;
+					}
+					break;
+				}
+				case MotionEvent.ACTION_UP:
+				case MotionEvent.ACTION_CANCEL: {
+					if (dragging) {
+						dragging = false;
+						float tx = fg.getTranslationX();
+						if (tx > swipeActionWidthPx / 2)
+							parkOpenRow(fg, swipeActionWidthPx);
+						else if (tx < -swipeActionWidthPx / 2)
+							parkOpenRow(fg, -swipeActionWidthPx);
+						else
+							closeOpenSwipeRow();
+						return true;
+					}
+					if (openSwipeRow == fg) {
+						closeOpenSwipeRow();
+						return true;
+					}
+					break;
+				}
+			}
+			return false;
+		}
 	}
 
 	private void markLastEpUnseen() {
@@ -2579,6 +2769,10 @@ public class DroidShows extends AppCompatActivity
 				holder.context = (ImageView) convertView.findViewById(R.id.seriecontext);
 				holder.watched = (CheckBox) convertView.findViewById(R.id.watched_check);
 				holder.textCol = (LinearLayout) convertView.findViewById(R.id.serie);
+				holder.fg = convertView.findViewById(R.id.row_foreground);
+				holder.rowActions = convertView.findViewById(R.id.row_actions);
+				holder.actionWatched = convertView.findViewById(R.id.row_action_watched);
+				holder.actionDelete = convertView.findViewById(R.id.row_action_delete);
 				holder.icon.getLayoutParams().height = largePostersOption ? LARGE_POSTERS_HEIGHT : ViewGroup.LayoutParams.FILL_PARENT;
 				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 					holder.context.setImageResource(R.drawable.context_material);
@@ -2697,6 +2891,7 @@ public class DroidShows extends AppCompatActivity
 					}
 				}
 			}
+			bindRowSwipe(holder, serie);
 			return convertView;
 		}
 
@@ -2788,5 +2983,9 @@ public class DroidShows extends AppCompatActivity
 		ImageView context;
 		CheckBox watched;
 		LinearLayout textCol;
+		View fg;			// sliding foreground card (swipe-reveal)
+		View rowActions;	// behind-layer holding the action buttons
+		View actionWatched;
+		View actionDelete;
 	}
 }

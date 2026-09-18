@@ -25,7 +25,7 @@
 <string name="menu_show_current">Actieve series</string>
 <string name="menu_exclude_seen">Verberg bekeken</string>
 <string name="menu_include_seen">Toon bekeken</string>
-<string name="menu_log">Logboek</string>
+<string name="menu_log">Geschiedenis</string>
 <string name="menu_close_log">Logboek sluiten</string>
 <string name="menu_context_view_serie_details">Details serie</string>
 <string name="menu_context_view_imdb">Serie op IMDb</string>
