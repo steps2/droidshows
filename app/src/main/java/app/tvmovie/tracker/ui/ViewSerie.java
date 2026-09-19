@@ -46,6 +46,7 @@ public class ViewSerie extends Activity
 	private SwipeDetect swipeDetect = new SwipeDetect();
 	private boolean isMovie = false;
 	private String movieEpisodeId = null;
+	private double currentUserRating = 0;
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -60,7 +61,7 @@ public class ViewSerie extends Activity
 		serieId = getIntent().getStringExtra("serieId");
 	
 		String query = "SELECT serieName, posterThumb, poster, fanart, overview, status, firstAired, airsDayOfWeek, "
-			+ "airsTime, runtime, network, rating, contentRating, imdbId, mediaType FROM series WHERE id = '" + serieId + "'";
+			+ "airsTime, runtime, network, rating, contentRating, imdbId, mediaType, userRating, tmdbId FROM series WHERE id = '" + serieId + "'";
 		Cursor c = db.Query(query);
 		if (c != null && c.moveToFirst()) {
 			int snameCol = c.getColumnIndex("serieName");
@@ -78,6 +79,7 @@ public class ViewSerie extends Activity
 			int contentRatingCol = c.getColumnIndex("contentRating");
 			int imdbIdCol = c.getColumnIndex("imdbId");
 			int mediaTypeCol = c.getColumnIndex("mediaType");
+			int userRatingCol = c.getColumnIndex("userRating");
 			serieName = c.getString(snameCol);
 			String posterThumb = c.getString(posterThumbCol);
 			posterURL = c.getString(posterCol);
@@ -93,6 +95,7 @@ public class ViewSerie extends Activity
 			String contentRating = c.getString(contentRatingCol);
 			imdbId = c.getString(imdbIdCol);
 			isMovie = (mediaTypeCol != -1 && c.getInt(mediaTypeCol) == 1);
+			currentUserRating = (userRatingCol != -1 ? c.getDouble(userRatingCol) : 0);
 			c.close();
 					
 			if (network != null && !network.equalsIgnoreCase("null")) {
@@ -153,6 +156,7 @@ public class ViewSerie extends Activity
 			else
 				ratingV.setText(isMovie ? "TMDB Info" : "IMDb Info");
 			ratingV.setOnTouchListener(swipeDetect);
+			updateUserRatingRow();
 					
 			if (firstAired != null && !firstAired.equals("null") && !firstAired.equals("")) {
 				TextView firstAiredV = (TextView) findViewById(R.id.firstAired);
@@ -225,8 +229,80 @@ public class ViewSerie extends Activity
 		if (getApplicationContext().getPackageManager().resolveActivity(testForApp, 0) == null)
 			uri = "https://m.imdb.com/";
 
+		loadWatchProviders();
 	}
 	
+	/* Personal rating row + dialog (shared with the long-press menu). */
+	private void updateUserRatingRow() {
+		TextView userRatingV = (TextView) findViewById(R.id.userRating);
+		if (userRatingV == null) return;
+		if (currentUserRating > 0) {
+			userRatingV.setText(getString(R.string.your_rating) + " " + RatingDialog.starsLabel(currentUserRating));
+			userRatingV.setVisibility(View.VISIBLE);
+		} else {
+			userRatingV.setVisibility(View.GONE);
+		}
+	}
+
+	public void rateShow(View v) {
+		if (swipeDetect.value != 0) return;
+		RatingDialog.show(this, getString(R.string.rate_title) + ": " + serieName, currentUserRating,
+			new RatingDialog.OnRated() {
+				public void onRated(double rating10) {
+					db.setUserRating(serieId, rating10);
+					currentUserRating = rating10;
+					updateUserRatingRow();
+				}
+			});
+	}
+
+	/* Where-to-watch: TMDB watch/providers for the device region. Movies use
+	 * their TMDB id directly; TV shows resolve via the cached tmdbId, falling
+	 * back to an IMDb-id lookup that is then cached. The section stays hidden
+	 * when the TMDB key is unset or no providers are found. */
+	private void loadWatchProviders() {
+		final String apiKey = getSharedPreferences("DroidShowsPref", 0)
+			.getString(app.tvmovie.tracker.DroidShows.TMDB_API_KEY_NAME, "");
+		if (apiKey == null || apiKey.isEmpty()) return;
+		new Thread(new Runnable() {
+			public void run() {
+				final app.tvmovie.tracker.provider.TMDB tmdb =
+					new app.tvmovie.tracker.provider.TMDB(apiKey);
+				String tmdbId = "";
+				String kind = "tv";
+				if (isMovie) {
+					tmdbId = serieId;
+					kind = "movie";
+				} else {
+					tmdbId = db.getTmdbId(serieId);
+					if (tmdbId.isEmpty() && imdbId != null && imdbId.startsWith("tt")) {
+						tmdbId = tmdb.findTvShowIdByImdb(imdbId);
+						if (!tmdbId.isEmpty() && !"0".equals(tmdbId))
+							db.setTmdbId(serieId, tmdbId);
+					}
+				}
+				final List<String> providers = (!tmdbId.isEmpty() && !"0".equals(tmdbId))
+					? tmdb.getWatchProviders(kind, tmdbId) : new ArrayList<String>();
+				runOnUiThread(new Runnable() {
+					public void run() {
+						if (isFinishing() || providers.isEmpty()) return;
+						View field = findViewById(R.id.watchField);
+						TextView tv = (TextView) findViewById(R.id.watchProviders);
+						if (field != null && tv != null) {
+							StringBuilder sb = new StringBuilder();
+							for (String pr : providers) {
+								if (sb.length() > 0) sb.append("\u2022 ");
+								sb.append(pr).append("  ");
+							}
+							tv.setText(sb.toString().trim());
+							field.setVisibility(View.VISIBLE);
+						}
+					}
+				});
+			}
+		}).start();
+	}
+
 	private String translateStatus(String statusValue) {
 		if (statusValue.equalsIgnoreCase("Continuing")) {
 			return getString(R.string.showstatus_continuing);

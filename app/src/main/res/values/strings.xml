@@ -195,4 +195,28 @@
 <string name="msg_migrating">Migrating library…</string>
 <string name="msg_migrating_wait">This might take a little time. Please wait…</string>
 <string name="msg_migrated">Library migrated</string>
+<!-- Six-feature batch: notifications, widget, where-to-watch, stats, calendar, ratings -->
+<string name="dialog_notify_new_episodes">New episode notifications</string>
+<string name="notify_channel_new_episodes">New episodes</string>
+<string name="stats_title">Statistics</string>
+<string name="stats_episodes_watched">Episodes watched</string>
+<string name="stats_hours_watched">Hours watched</string>
+<string name="stats_current_streak">Current streak</string>
+<string name="stats_longest_streak">Longest streak</string>
+<string name="stats_days">%1$d days</string>
+<string name="stats_watching">Watching</string>
+<string name="stats_finished">Finished</string>
+<string name="stats_shows">TV shows</string>
+<string name="stats_movies">Films</string>
+<string name="stats_avg_rating">Average rating</string>
+<string name="stats_not_rated">Not rated yet</string>
+<string name="calendar_title">Calendar</string>
+<string name="calendar_no_airings">No episodes air this day.</string>
+<string name="where_to_watch">Where to watch:</string>
+<string name="your_rating">Your rating:</string>
+<string name="rate_title">Your rating</string>
+<string name="rate_clear">Clear</string>
+<string name="widget_up_next">Up next</string>
+<string name="widget_nothing">Nothing coming up</string>
+<string name="widget_movies_line">%1$d films to watch</string>
 </resources>

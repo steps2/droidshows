@@ -178,7 +178,8 @@ public class DroidShows extends AppCompatActivity
 	private static final int TOGGLE_ARCHIVED_CONTEXT = MARK_NEXT_EPISODE_AS_SEEN_CONTEXT + 1;
 	private static final int PIN_CONTEXT = TOGGLE_ARCHIVED_CONTEXT + 1;
 	private static final int UPDATE_CONTEXT = PIN_CONTEXT + 1;
-	private static final int SYNOPSIS_LANGUAGE = UPDATE_CONTEXT + 1;
+	private static final int RATE_CONTEXT = UPDATE_CONTEXT + 1;
+	private static final int SYNOPSIS_LANGUAGE = RATE_CONTEXT + 1;
 	private static final int DELETE_CONTEXT = SYNOPSIS_LANGUAGE + 1;
 	private static AlertDialog m_AlertDlg;
 	private volatile int updateAllDone = 0;
@@ -227,6 +228,7 @@ public class DroidShows extends AppCompatActivity
 	public static boolean showNextAiring;
 	private static final String MARK_FROM_LAST_WATCHED = "mark_from_last_watched";
 	public static boolean markFromLastWatched;
+	public static boolean notifyNewEpisodes;
 	public static String langCode;
 	private static final String PINNED_SHOWS_NAME = "pinned_shows";
 	private static List<String> pinnedShows = new ArrayList<String>();
@@ -338,6 +340,11 @@ public class DroidShows extends AppCompatActivity
 		langCode = sharedPrefs.getString(LANGUAGE_CODE_NAME, getString(R.string.lang_code));
 		showNextAiring = sharedPrefs.getBoolean(SHOW_NEXT_AIRING, false);
 		markFromLastWatched = sharedPrefs.getBoolean(MARK_FROM_LAST_WATCHED, false);
+		notifyNewEpisodes = sharedPrefs.getBoolean(EpisodeNotifier.NOTIFY_NEW_EPISODES_PREF, true);
+		if (notifyNewEpisodes) {
+			EpisodeNotifier.scheduleDailyCheck(this);
+			requestNotificationPermission();
+		}
 		String pinnedShowsStr = sharedPrefs.getString(PINNED_SHOWS_NAME, "");
 		if (!pinnedShowsStr.isEmpty())
 			pinnedShows = new ArrayList<String>(Arrays.asList(pinnedShowsStr.replace("[", "").replace("]", "").split(", ")));
@@ -407,6 +414,16 @@ public class DroidShows extends AppCompatActivity
 				if (item.getItemId() == R.id.nav_discover) {
 					drawerLayout.closeDrawer(navView);
 					startActivity(new Intent(DroidShows.this, app.tvmovie.tracker.ui.DiscoverActivity.class));
+					return true;
+				}
+				if (item.getItemId() == R.id.nav_stats) {
+					drawerLayout.closeDrawer(navView);
+					startActivity(new Intent(DroidShows.this, app.tvmovie.tracker.ui.StatsActivity.class));
+					return true;
+				}
+				if (item.getItemId() == R.id.nav_calendar) {
+					drawerLayout.closeDrawer(navView);
+					startActivity(new Intent(DroidShows.this, app.tvmovie.tracker.ui.CalendarActivity.class));
 					return true;
 				}
 				int position = (item.getItemId() == R.id.nav_movies) ? 1 : 0;
@@ -1015,6 +1032,7 @@ public class DroidShows extends AppCompatActivity
 		((CheckBox) about.findViewById(R.id.switch_swipe_direction)).setChecked(switchSwipeDirection);
 		((CheckBox) about.findViewById(R.id.show_next_airing)).setChecked(showNextAiring);
 		((CheckBox) about.findViewById(R.id.mark_from_last_watched)).setChecked(markFromLastWatched);
+		((CheckBox) about.findViewById(R.id.notify_new_episodes)).setChecked(notifyNewEpisodes);
 		final EditText tmdbKeyV = (EditText) about.findViewById(R.id.tmdb_api_key);
 		tmdbKeyV.setText(sharedPrefs.getString(TMDB_API_KEY_NAME, ""));
 		m_AlertDlg = new MaterialAlertDialogBuilder(this)
@@ -1109,6 +1127,15 @@ public class DroidShows extends AppCompatActivity
 			case R.id.mark_from_last_watched:
 				markFromLastWatched ^= true;
 				updateShowStats();
+				break;
+			case R.id.notify_new_episodes:
+				notifyNewEpisodes ^= true;
+				if (notifyNewEpisodes) {
+					EpisodeNotifier.scheduleDailyCheck(DroidShows.this);
+					requestNotificationPermission();
+				} else {
+					EpisodeNotifier.cancelDailyCheck(DroidShows.this);
+				}
 				break;
 			case R.id.theme_option:
 				int themeMode = getSharedPreferences(PREF_NAME, 0).getInt(ThemeHelper.THEME_PREF_NAME, ThemeHelper.THEME_AUTOMATIC);
@@ -1446,6 +1473,7 @@ public class DroidShows extends AppCompatActivity
 						/* The restore wiped the poster cache: re-download
 						 * posters for shows whose file is now missing. */
 						refreshMissingPosters();
+						WidgetUpdater.refresh(getApplicationContext());
 						Toast.makeText(getApplicationContext(), R.string.dialog_restore_done, Toast.LENGTH_LONG).show();
 					}
 				});
@@ -1529,6 +1557,7 @@ public class DroidShows extends AppCompatActivity
 			menu.add(0, PIN_CONTEXT, PIN_CONTEXT, getString(R.string.menu_context_pin));
 			menu.add(0, DELETE_CONTEXT, DELETE_CONTEXT, getString(isMovie ? R.string.menu_context_delete_movie : R.string.menu_context_delete));
 			menu.add(0, UPDATE_CONTEXT, UPDATE_CONTEXT, getString(isMovie ? R.string.menu_context_update_movie : R.string.menu_context_update));
+			menu.add(0, RATE_CONTEXT, RATE_CONTEXT, getString(R.string.rate_title));
 		    if (serie.getPassiveStatus())
 		    	menu.findItem(TOGGLE_ARCHIVED_CONTEXT).setTitle(R.string.menu_unarchive);
 		    if (pinnedShows.contains(serie.getSerieId()))
@@ -1563,6 +1592,21 @@ public class DroidShows extends AppCompatActivity
 			case UPDATE_CONTEXT :
 				updateSerie(serie, info.position);
 				return true;
+			case RATE_CONTEXT : {
+				final String rateId = serieId;
+				final String rateName = serie.getName();
+				app.tvmovie.tracker.ui.RatingDialog.show(DroidShows.this,
+						getString(R.string.rate_title) + ": " + rateName,
+						db.getUserRating(rateId),
+						new app.tvmovie.tracker.ui.RatingDialog.OnRated() {
+							public void onRated(double rating10) {
+								db.setUserRating(rateId, rating10);
+								getSeries();
+								WidgetUpdater.refresh(DroidShows.this);
+							}
+						});
+				return true;
+			}
 			case TOGGLE_ARCHIVED_CONTEXT :
 				asyncInfo.cancel(true);
 				boolean passiveStatus = serie.getPassiveStatus();
@@ -1676,6 +1720,7 @@ public class DroidShows extends AppCompatActivity
 			Toast.makeText(getApplicationContext(), serie.getName() +" "+ episodeMarked +" "+ getString(R.string.messages_marked_seen), Toast.LENGTH_SHORT).show();
 			undo.add(new String[] {serieId, nextEpisode, serie.getName()});
 			updateShowView(serie);
+			WidgetUpdater.refresh(this);
 		}
 	}
 
@@ -1691,6 +1736,7 @@ public class DroidShows extends AppCompatActivity
 		if (markingSeen)
 			undo.add(new String[] {serieId, episodeId, movie.getName()});
 		updateShowView(movie);
+		WidgetUpdater.refresh(this);
 	}
 
 	/* Wire swipe-reveal actions for one row (beta 33). Called on every bind. */
@@ -2239,6 +2285,7 @@ public class DroidShows extends AppCompatActivity
 							toastMsg = isMovie ? getString(R.string.messages_error_dbupdate_movie) : "Database error while updating show";
 						updatePosterThumb(serieId, sToUpdate);
 						hideTopProgress();
+						WidgetUpdater.refresh(getApplicationContext());
 						final String toastText = sToUpdate.getSerieName() +" "+ toastMsg;
 						new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
 							public void run() {
@@ -2567,11 +2614,27 @@ public class DroidShows extends AppCompatActivity
 					 * library — the sync above only covered the current tab. */
 					if (!wasSwipe)
 						refreshMissingPosters();
+					/* Fresh data is in: check for newly-aired episodes. */
+					EpisodeNotifier.checkNow(getApplicationContext());
+					WidgetUpdater.refresh(getApplicationContext());
 				}
 			};
 			updatingAll = true;
 			updateAllShowsTh = new Thread(updateallseries);
 			updateAllShowsTh.start();
+		}
+	}
+
+	/* Ask for POST_NOTIFICATIONS on Android 13+ so new-episode alerts can
+	 * show. If denied, the notifier silently skips (nothing crashes). */
+	private static final int REQ_POST_NOTIFICATIONS = 1401;
+
+	private void requestNotificationPermission() {
+		if (android.os.Build.VERSION.SDK_INT >= 33
+				&& checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+					!= android.content.pm.PackageManager.PERMISSION_GRANTED) {
+			requestPermissions(new String[] { android.Manifest.permission.POST_NOTIFICATIONS },
+					REQ_POST_NOTIFICATIONS);
 		}
 	}
 
@@ -2732,6 +2795,7 @@ public class DroidShows extends AppCompatActivity
 		ed.putString(LANGUAGE_CODE_NAME, langCode);
 		ed.putBoolean(SHOW_NEXT_AIRING, showNextAiring);
 		ed.putBoolean(MARK_FROM_LAST_WATCHED, markFromLastWatched);
+		ed.putBoolean(EpisodeNotifier.NOTIFY_NEW_EPISODES_PREF, notifyNewEpisodes);
 		ed.putString(PINNED_SHOWS_NAME, pinnedShows.toString());
 		ed.putBoolean(FILTER_NETWORKS_NAME, filterNetworks);
 		ed.putString(NETWORKS_NAME, networks.toString());

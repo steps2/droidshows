@@ -2,4 +2,6 @@
 	<item android:id="@+id/nav_tv" android:title="@string/media_tv_shows" android:icon="@drawable/ic_drawer_tv"/>
 	<item android:id="@+id/nav_movies" android:title="@string/media_movies" android:icon="@drawable/ic_drawer_movie"/>
 	<item android:id="@+id/nav_discover" android:title="@string/discover" android:icon="@drawable/ic_discover_compass"/>
+	<item android:id="@+id/nav_stats" android:title="@string/stats_title" android:icon="@drawable/ic_menu_stats"/>
+	<item android:id="@+id/nav_calendar" android:title="@string/calendar_title" android:icon="@drawable/ic_menu_calendar"/>
 </menu>

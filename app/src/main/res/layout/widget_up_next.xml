@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/widget_root"
+	android:layout_width="match_parent" android:layout_height="match_parent"
+	android:background="@drawable/widget_bg"
+	android:orientation="vertical" android:padding="12dp">
+	<TextView android:id="@+id/widget_header"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:text="@string/widget_up_next"
+		android:textStyle="bold" android:textSize="14sp" android:textColor="#FFFFFF"
+		android:paddingBottom="4dp"/>
+	<TextView android:id="@+id/widget_row_0"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:textSize="12sp" android:textColor="#FFFFFF"
+		android:singleLine="true" android:ellipsize="end" android:paddingTop="2dp"/>
+	<TextView android:id="@+id/widget_row_1"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:textSize="12sp" android:textColor="#FFFFFF"
+		android:singleLine="true" android:ellipsize="end" android:paddingTop="2dp"/>
+	<TextView android:id="@+id/widget_row_2"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:textSize="12sp" android:textColor="#FFFFFF"
+		android:singleLine="true" android:ellipsize="end" android:paddingTop="2dp"/>
+	<TextView android:id="@+id/widget_row_3"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:textSize="12sp" android:textColor="#FFFFFF"
+		android:singleLine="true" android:ellipsize="end" android:paddingTop="2dp"/>
+	<TextView android:id="@+id/widget_row_4"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:textSize="12sp" android:textColor="#FFFFFF"
+		android:singleLine="true" android:ellipsize="end" android:paddingTop="2dp"/>
+	<TextView android:id="@+id/widget_movies"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:textSize="12sp" android:textColor="#B3FFFFFF"
+		android:paddingTop="4dp"/>
+</LinearLayout>

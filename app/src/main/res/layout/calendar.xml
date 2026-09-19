@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:orientation="vertical"
+	android:layout_width="match_parent" android:layout_height="match_parent">
+	<com.google.android.material.progressindicator.LinearProgressIndicator
+		android:id="@+id/top_progress"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:visibility="gone"/>
+	<LinearLayout android:orientation="horizontal"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:gravity="center_vertical" android:padding="4dp">
+		<Button android:id="@+id/cal_prev"
+			android:layout_width="wrap_content" android:layout_height="wrap_content"
+			android:text="\u2039" android:textSize="22sp"/>
+		<TextView android:id="@+id/cal_title"
+			android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+			android:gravity="center" android:textSize="18sp" android:textStyle="bold"/>
+		<Button android:id="@+id/cal_next"
+			android:layout_width="wrap_content" android:layout_height="wrap_content"
+			android:text="\u203a" android:textSize="22sp"/>
+	</LinearLayout>
+	<GridView android:id="@+id/cal_weekdays"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:numColumns="7" android:stretchMode="columnWidth"
+		android:verticalSpacing="2dp" android:horizontalSpacing="2dp"/>
+	<GridView android:id="@+id/cal_grid"
+		android:layout_width="match_parent" android:layout_height="wrap_content"
+		android:numColumns="7" android:stretchMode="columnWidth"
+		android:verticalSpacing="2dp" android:horizontalSpacing="2dp"/>
+	<ListView android:id="@+id/cal_list"
+		android:layout_width="match_parent" android:layout_height="0dp"
+		android:layout_weight="1"/>
+</LinearLayout>

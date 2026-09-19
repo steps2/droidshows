@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:versionCode="71110" android:versionName="7.11.10">
 	<uses-permission android:name="android.permission.INTERNET"/>
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE"/>
@@ -43,5 +44,23 @@
 	<activity android:name=".ui.SerieEpisodes" android:configChanges="orientation|screenSize"/>
 	<activity android:name=".ui.ViewEpisode" android:configChanges="orientation|screenSize"/>
 	<activity android:label="@string/menu_context_view_serie_details" android:name=".ui.ViewSerie" android:configChanges="orientation|screenSize"/>
+	<activity android:label="@string/stats_title" android:name=".ui.StatsActivity" android:configChanges="orientation|screenSize"/>
+	<activity android:label="@string/calendar_title" android:name=".ui.CalendarActivity" android:configChanges="orientation|screenSize"/>
+	<receiver android:name=".BootReceiver" android:exported="false">
+		<intent-filter>
+			<action android:name="android.intent.action.BOOT_COMPLETED" />
+		</intent-filter>
+	</receiver>
+	<receiver android:name=".EpisodeCheckReceiver" android:exported="false">
+		<intent-filter>
+			<action android:name="app.tvmovie.tracker.CHECK_NEW_EPISODES" />
+		</intent-filter>
+	</receiver>
+	<receiver android:name=".UpNextWidget" android:exported="false">
+		<intent-filter>
+			<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+		</intent-filter>
+		<meta-data android:name="android.appwidget.provider" android:resource="@xml/up_next_widget_info" />
+	</receiver>
 	</application>
 </manifest>

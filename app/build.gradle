@@ -10,8 +10,8 @@ android {
 
         // versionCode 71110     // original andoid 2.3 api 9 version
         // versionName "7.11.10" // original andoid 2.3 api 9 version
-        versionCode 10001            // 1.0.1: poster refresh after restore/sync
-        versionName "1.0.1"          // fresh numbering for the renamed app
+        versionCode 10100            // 1.1.0: six-feature batch
+        versionName "1.1.0"          // fresh numbering for the renamed app
 
         vectorDrawables.useSupportLibrary = true
     }

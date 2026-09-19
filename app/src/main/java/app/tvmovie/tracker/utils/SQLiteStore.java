@@ -451,13 +451,13 @@ public class SQLiteStore extends SQLiteOpenHelper
 
 	private List<EpisodeSeen> getSeen(String serieId, int max_season) {
 		List<EpisodeSeen> episodesSeen = new ArrayList<EpisodeSeen>();
-		Cursor c = Query("SELECT seasonNumber, episodeNumber, seen FROM episodes WHERE serieId='"+ serieId +"'"
+		Cursor c = Query("SELECT seasonNumber, episodeNumber, seen, notified FROM episodes WHERE serieId='"+ serieId +"'"
 			+ (max_season != -1 ? " AND (seasonNumber="+ max_season +" OR seasonNumber=0)": "")
-			+" AND seen>0");
+			+" AND (seen>0 OR notified<>0)");
 		try {
 			if (c != null && c.moveToFirst()) {
 				do {
-					episodesSeen.add(new EpisodeSeen(c.getInt(0) +"x"+ c.getInt(1), c.getLong(2)));
+					episodesSeen.add(new EpisodeSeen(c.getInt(0) +"x"+ c.getInt(1), c.getLong(2), c.getInt(3)));
 				} while (c.moveToNext());
 			}
 		} catch (SQLiteException e) {
@@ -476,7 +476,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 			db.beginTransaction();
 			if (c != null && c.moveToFirst()) {
 				do {
-					episodesSeen.add(new EpisodeSeen(c.getString(0), c.getLong(1)));
+					episodesSeen.add(new EpisodeSeen(c.getString(0), c.getLong(1), 0));
 				} while (c.moveToNext());
 			}
 			Date seenTimestamp;
@@ -862,6 +862,91 @@ public class SQLiteStore extends SQLiteOpenHelper
 			Log.e(TAG, e.getMessage());
 		}
 	}
+	/* Personal rating, 0-10 scale (0 = not rated). */
+	public double getUserRating(String serieId) {
+		double rating = 0;
+		Cursor c = Query("SELECT userRating FROM series WHERE id='"+ serieId +"'");
+		try {
+			if (c != null && c.moveToFirst()) {
+				rating = c.getDouble(0);
+			}
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+		if (c != null) c.close();
+		return rating;
+	}
+
+	public void setUserRating(String serieId, double rating) {
+		try {
+			db.execSQL("UPDATE series SET userRating="+ rating +" WHERE id='"+ serieId +"'");
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+	}
+
+	/* Cached TMDB id for TV shows ("", unknown / not resolved yet). */
+	public String getTmdbId(String serieId) {
+		String tmdbId = "";
+		Cursor c = Query("SELECT tmdbId FROM series WHERE id='"+ serieId +"'");
+		try {
+			if (c != null && c.moveToFirst()) {
+				tmdbId = c.getString(0);
+			}
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+			tmdbId = "";
+		}
+		if (c != null) c.close();
+		return tmdbId == null ? "" : tmdbId;
+	}
+
+	public void setTmdbId(String serieId, String tmdbId) {
+		try {
+			db.execSQL("UPDATE series SET tmdbId='"+ tmdbId +"' WHERE id='"+ serieId +"'");
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+	}
+
+	/* Episodes that have aired but were never notified about (for the
+	 * new-episode check). Each row: {rowId, serieId, serieName, seasonNumber,
+	 * episodeNumber, episodeName, firstAired}. TV shows on the Watching list only. */
+	public List<String[]> getUnnotifiedAiredEpisodes(String today) {
+		List<String[]> rows = new ArrayList<String[]>();
+		Cursor c = Query("SELECT e.id, e.serieId, s.serieName, e.seasonNumber, e.episodeNumber, "
+			+ "e.episodeName, e.firstAired FROM episodes e JOIN series s ON s.id=e.serieId "
+			+ "WHERE s.mediaType=0 AND (s.passiveStatus=0 OR s.passiveStatus IS NULL) "
+			+ "AND e.seen=0 AND e.notified=0 AND e.seasonNumber<>0 "
+			+ "AND e.firstAired<>'' AND e.firstAired<='"+ today +"' "
+			+ "ORDER BY s.serieName COLLATE NOCASE, e.seasonNumber, e.episodeNumber");
+		try {
+			if (c != null && c.moveToFirst()) {
+				do {
+					rows.add(new String[] { c.getString(0), c.getString(1), c.getString(2),
+						c.getString(3), c.getString(4), c.getString(5), c.getString(6) });
+				} while (c.moveToNext());
+			}
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+		if (c != null) c.close();
+		return rows;
+	}
+
+	public void markEpisodesNotified(List<String> episodeRowIds) {
+		if (episodeRowIds == null || episodeRowIds.isEmpty()) return;
+		try {
+			StringBuilder in = new StringBuilder();
+			for (String id : episodeRowIds) {
+				if (in.length() > 0) in.append(",");
+				in.append("'").append(id.replace("'", "''")).append("'");
+			}
+			db.execSQL("UPDATE episodes SET notified=1 WHERE id IN ("+ in +")");
+		} catch (SQLiteException e) {
+			Log.e(TAG, e.getMessage());
+		}
+	}
 
 	public boolean updateSerie(Serie s, boolean last_season) {
 		if (s == null) {
@@ -994,10 +1079,12 @@ public class SQLiteStore extends SQLiteOpenHelper
 				}
 				
 				long iseen = 0;
+				int inotified = 0;
 				String epCode = ep.getSeasonNumber() +"x"+ ep.getEpisodeNumber();
 				for (EpisodeSeen es : seenEpisodes) {
 					if (epCode.equals(es.episode)) {
 						iseen = es.seen;
+						inotified = es.notified;
 						break;
 					}
 				}
@@ -1006,7 +1093,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 					execQueryOrThrow("INSERT INTO episodes (serieId, id, combinedEpisodeNumber, combinedSeason, "
 						+"dvdChapter, dvdDiscId, dvdEpisodeNumber, dvdSeason, epImgFlag, episodeName, "
 						+"episodeNumber, firstAired, imdbId, language, overview, productionCode, rating, seasonNumber, "
-						+"absoluteNumber, filename, lastUpdated, seasonId, seen) VALUES ('"
+						+"absoluteNumber, filename, lastUpdated, seasonId, seen, notified) VALUES ('"
 						+ s.getId()
 						+"', '"
 						+ ep.getId()
@@ -1049,7 +1136,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 						+"', '"
 						+ ep.getLastUpdated()
 						+"', '"
-						+ ep.getSeasonId() +"', "+ iseen +");");
+						+ ep.getSeasonId() +"', "+ iseen +", "+ inotified +");");
 				}
 			}
 			db.setTransactionSuccessful();
@@ -1127,7 +1214,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 	public void onCreate(SQLiteDatabase dbase) {
 		try {
 			dbase.execSQL("CREATE TABLE IF NOT EXISTS droidseries (version VARCHAR);");
-			dbase.execSQL("INSERT INTO droidseries (version) VALUES ('0.1.5-7G4');");
+			dbase.execSQL("INSERT INTO droidseries (version) VALUES ('0.1.5-7G5');");
 			// tabela dos directors
 			dbase.execSQL("CREATE TABLE IF NOT EXISTS directors (serieId VARCHAR, episodeId VARCHAR, director VARCHAR);");
 			// tabela dos guestStars
@@ -1142,7 +1229,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 				+"firstAired VARCHAR, imdbId VARCHAR, language VARCHAR, overview TEXT, "
 				+"productionCode VARCHAR, rating VARCHAR, seasonNumber INT, "
 				+"absoluteNumber VARCHAR, filename VARCHAR,lastUpdated VARCHAR, "
-				+"seasonId VARCHAR, seen INT);");
+				+"seasonId VARCHAR, seen INT, notified INTEGER DEFAULT 0);");
 			// tabela dos actores
 			dbase.execSQL("CREATE TABLE IF NOT EXISTS actors (serieId VARCHAR, actor VARCHAR);");
 			// tabela dos genres
@@ -1158,7 +1245,7 @@ public class SQLiteStore extends SQLiteOpenHelper
 				+"fanart VARCHAR, lastUpdated VARCHAR, passiveStatus INTEGER DEFAULT 0, poster VARCHAR, "
 				+"posterInCache VARCHAR, posterThumb VARCHAR, "
 				+"seasonCount INTEGER, unwatchedAired INTEGER, unwatched INTEGER, nextEpisode VARCHAR, nextAir VARCHAR, "
-				+"extResources VARCHAR NOT NULL DEFAULT '', mediaType INTEGER DEFAULT 0, tvmazeId VARCHAR DEFAULT '');");
+				+"extResources VARCHAR NOT NULL DEFAULT '', mediaType INTEGER DEFAULT 0, tvmazeId VARCHAR DEFAULT '', userRating REAL DEFAULT 0, tmdbId VARCHAR DEFAULT '');");
 		} catch (SQLiteException e) {
 			Log.e(TAG, e.getMessage());
 		}
@@ -1195,10 +1282,12 @@ public class SQLiteStore extends SQLiteOpenHelper
 	private class EpisodeSeen {
 		public String episode;
 		public long seen;
+		public int notified;
 		
-		public EpisodeSeen(String episode, long seen) {
+		public EpisodeSeen(String episode, long seen, int notified) {
 			this.episode = episode;
 			this.seen = seen;
+			this.notified = notified;
 		}
 	}
 	

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rounded dark background for the Up next widget -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+	<corners android:radius="16dp"/>
+	<solid android:color="#CC1c1c1e"/>
+</shape>

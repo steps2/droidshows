@@ -7,7 +7,7 @@ import android.util.Log;
 public class Update
 {
 	private SQLiteStore db;
-	private String currentVersion = "0.1.5-7G4";
+	private String currentVersion = "0.1.5-7G5";
 	
 	public Update(SQLiteStore db) {
 		this.db = db;
@@ -38,6 +38,10 @@ public class Update
 		}
 		if (version.equals("0.1.5-7G3")) {
 			done = u0157G3To0157G4();
+			version = getVersion();
+		}
+		if (version.equals("0.1.5-7G4")) {
+			done = u0157G4To0157G5();
 		}
 		return done;
 	}
@@ -109,6 +113,21 @@ public class Update
 		try {
 			if (!db.convertSeenTimestamps()) return false;
 			db.execQuery("UPDATE droidseries SET version='0.1.5-7G3'");
+			return true;
+		} catch (Exception e) {
+			Log.e(SQLiteStore.TAG, "Error updating database");
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	private boolean u0157G4To0157G5() {
+		Log.d(SQLiteStore.TAG, "UPDATING TO VERSION 0.1.5-7G5");
+		try {
+			db.execQuery("ALTER TABLE episodes ADD COLUMN notified INTEGER DEFAULT 0");
+			db.execQuery("ALTER TABLE series ADD COLUMN userRating REAL DEFAULT 0");
+			db.execQuery("ALTER TABLE series ADD COLUMN tmdbId VARCHAR DEFAULT ''");
+			db.execQuery("UPDATE droidseries SET version='0.1.5-7G5'");
 			return true;
 		} catch (Exception e) {
 			Log.e(SQLiteStore.TAG, "Error updating database");

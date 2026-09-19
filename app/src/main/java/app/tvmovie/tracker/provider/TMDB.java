@@ -241,6 +241,65 @@ public class TMDB {
 	}
 
 	/**
+	 * Where-to-watch providers for a movie or TV show in the device region.
+	 * mediaKind is "movie" or "tv". Returns provider names with flat-rate
+	 * (streaming) services first, then rent, then buy; empty when unknown.
+	 * Never throws; returns an empty list on any failure.
+	 */
+	public List<String> getWatchProviders(String mediaKind, String tmdbId) {
+		List<String> providers = new ArrayList<String>();
+		if (tmdbId == null || tmdbId.isEmpty()) return providers;
+		try {
+			String region = java.util.Locale.getDefault().getCountry();
+			if (region == null || region.isEmpty()) region = "US";
+			String url = BASE + "/" + mediaKind + "/" + tmdbId + "/watch/providers?api_key=" + apiKey;
+			String json = fetchJson(url);
+			if (json == null) return providers;
+			JSONObject results = new JSONObject(json).optJSONObject("results");
+			if (results == null) return providers;
+			JSONObject r = results.optJSONObject(region);
+			if (r == null) r = results.optJSONObject("US");
+			if (r == null) return providers;
+			for (String key : new String[] { "flatrate", "rent", "buy" }) {
+				JSONArray arr = r.optJSONArray(key);
+				if (arr == null) continue;
+				for (int i = 0; i < arr.length(); i++) {
+					JSONObject pr = arr.optJSONObject(i);
+					if (pr == null) continue;
+					String name = pr.optString("provider_name", "");
+					if (!name.isEmpty() && !providers.contains(name))
+						providers.add(name);
+				}
+			}
+		} catch (Exception e) {
+			Log.e(TAG, "getWatchProviders failed: " + e.getMessage());
+		}
+		return providers;
+	}
+
+	/**
+	 * Resolve a TV show IMDb id (tt...) to its TMDB tv id via /find.
+	 * Returns "" when unknown or on any failure. Never throws.
+	 */
+	public String findTvShowIdByImdb(String imdbId) {
+		if (imdbId == null || imdbId.isEmpty()) return "";
+		try {
+			String url = BASE + "/find/" + URLEncoder.encode(imdbId, "UTF-8")
+				+ "?api_key=" + apiKey + "&external_source=imdb_id";
+			String json = fetchJson(url);
+			if (json == null) return "";
+			JSONArray tv = new JSONObject(json).optJSONArray("tv_results");
+			if (tv != null && tv.length() > 0) {
+				JSONObject first = tv.optJSONObject(0);
+				if (first != null) return String.valueOf(first.optInt("id", 0));
+			}
+		} catch (Exception e) {
+			Log.e(TAG, "findTvShowIdByImdb failed: " + e.getMessage());
+		}
+		return "";
+	}
+
+	/**
 	 * Build a TMDB image URL, null/empty-safe (returns "" when no path).
 	 */
 	public static String imageUrl(String path, String size) {
