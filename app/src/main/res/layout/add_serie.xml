@@ -3,7 +3,7 @@
 	<com.google.android.material.appbar.AppBarLayout android:layout_width="match_parent" android:layout_height="wrap_content">
 		<com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar" android:layout_width="match_parent" android:layout_height="?attr/actionBarSize" app:title="@string/menu_context_add_serie" app:navigationIcon="@drawable/ic_arrow_back"/>
 	</com.google.android.material.appbar.AppBarLayout>
-	<TextView android:layout_width="fill_parent" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="4dp" style="?android:attr/listSeparatorTextViewStyle" android:id="@+id/add_serie_title"/>
+	<TextView android:layout_width="fill_parent" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="4dp" style="?android:attr/listSeparatorTextViewStyle" android:id="@+id/add_serie_title" android:visibility="gone"/>
 	<androidx.appcompat.widget.SearchView android:id="@+id/add_serie_searchview" android:layout_width="fill_parent" android:layout_height="wrap_content" android:iconifiedByDefault="false" android:queryHint="@string/addserie_hint"/>
 	<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/add_progress" android:layout_width="fill_parent" android:layout_height="wrap_content" android:visibility="gone"/>
 	<ListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>

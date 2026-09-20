@@ -102,6 +102,7 @@ public class AddSerie extends AppCompatActivity
 				searchQuery = query;
 				TextView title = (TextView) findViewById(R.id.add_serie_title);
 				title.setText(getString(R.string.dialog_search) + " " + searchQuery);
+				title.setVisibility(View.VISIBLE);
 				searchView.clearFocus();
 				doSearch();
 				return true;
@@ -422,6 +423,7 @@ public class AddSerie extends AppCompatActivity
 			searchView.setQuery(searchQuery, false);
 			TextView title = (TextView) findViewById(R.id.add_serie_title);
 			title.setText(getString(R.string.dialog_search) + " " + searchQuery);
+			title.setVisibility(View.VISIBLE);
 			doSearch();
 		}
 		listView.setOnTouchListener(new SwipeDetect());

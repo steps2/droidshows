@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="fill_parent" android:keepScreenOn="true">
-	<TextView android:layout_width="fill_parent" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="4dp" style="?android:attr/listSeparatorTextViewStyle" android:id="@+id/add_movie_title"/>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="fill_parent" android:keepScreenOn="true">
+	<com.google.android.material.appbar.AppBarLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+		<com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar" android:layout_width="match_parent" android:layout_height="?attr/actionBarSize" app:title="@string/menu_add_movie" app:navigationIcon="@drawable/ic_arrow_back"/>
+	</com.google.android.material.appbar.AppBarLayout>
+	<TextView android:layout_width="fill_parent" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="4dp" style="?android:attr/listSeparatorTextViewStyle" android:id="@+id/add_movie_title" android:visibility="gone"/>
 	<androidx.appcompat.widget.SearchView android:id="@+id/add_movie_searchview" android:layout_width="fill_parent" android:layout_height="wrap_content" android:iconifiedByDefault="false" android:queryHint="@string/search_hint"/>
 	<com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/add_progress" android:layout_width="fill_parent" android:layout_height="wrap_content" android:visibility="gone"/>
 	<ListView android:layout_width="fill_parent" android:layout_height="fill_parent" android:id="@+id/android:list"/>
