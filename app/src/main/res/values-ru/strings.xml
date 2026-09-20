@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <string name="lang_code">ru</string>
-<string name="layout_app_name">TVMovie Tracker</string>
+<string name="layout_app_name">TV Movie Tracker</string>
 <string name="layout_main_no_items">Сериалы не найдены. Для добавления сералов используйте соответствующий пункт меню</string>
 <string name="layout_search_no_items">Сериалы не найдены.</string>
 <string name="layout_seasons_no_items">Сезонов нет.</string>

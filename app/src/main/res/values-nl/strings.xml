@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <string name="lang_code">nl</string>
-<string name="layout_app_name">TVMovie Tracker</string>
+<string name="layout_app_name">TV Movie Tracker</string>
 <string name="layout_main_no_items">Geen series gevonden.</string>
 <string name="layout_search_no_items">Geen series gevonden.</string>
 <string name="layout_seasons_no_items">Geen seizoenen gevonden.</string>
@@ -51,7 +51,7 @@
 <string name="crash_title">De app is gecrasht</string>
 <string name="dialog_use_mirror">Gebruik TheTVDB mirror (probeer dit als updates te langzaam gaan)</string>
 <string name="dialog_restore">Herstellen</string>
-<string name="dialog_restore_now">Het herstellen van een database zal de huidige informatie in TVMovie Tracker verwijderen. Doorgaan?</string>
+<string name="dialog_restore_now">Het herstellen van een database zal de huidige informatie in TV Movie Tracker verwijderen. Doorgaan?</string>
 <string name="dialog_restore_done">Database hersteld</string>
 <string name="dialog_restore_failed">Kon herstel niet voltooien!</string>
 <string name="dialog_title_delete">Serie verwijderen?</string>

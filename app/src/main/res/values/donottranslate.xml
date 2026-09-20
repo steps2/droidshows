@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-<string name="copyright">TVMovie Tracker v{v}
+<string name="copyright">TV Movie Tracker v{v}
 \n&#169;2010 C. Limpinho, P. Cabido: code.google.com/p/droidseries
 \nModified by M. Berthe: gitorious.org/droidseries/mckaels-droidseries
 \n&#169;2014-{y} Guillaume (GPLv3): ltGuillaume.github.io/DroidShows
