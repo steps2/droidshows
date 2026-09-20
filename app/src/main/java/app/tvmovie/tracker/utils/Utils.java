@@ -115,10 +115,6 @@ public class Utils
 		return new File(ctx.getCacheDir(), "thumbs");
 	}
 
-	public static File libraryPosterDir(Context ctx) {
-		return new File(posterDir(ctx), "library");
-	}
-
 	public static File discoverPosterDir(Context ctx) {
 		return new File(posterDir(ctx), "discover");
 	}
