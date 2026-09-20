@@ -7,9 +7,9 @@
 <p align="center">Track every TV show and movie you watch — episodes, films, ratings and what's on next.</p>
 
 <p align="center">
-  <a href="https://github.com/steps2/droidshows/releases/latest"><img src="https://img.shields.io/github/v/release/steps2/droidshows" alt="Latest release"></a>
-  <img src="https://github.com/steps2/droidshows/actions/workflows/build-apk.yml/badge.svg" alt="Build status">
-  <img src="https://img.shields.io/github/license/steps2/droidshows" alt="GPL-3.0 licence">
+  <a href="https://github.com/steps2/tvmovietracker/releases/latest"><img src="https://img.shields.io/github/v/release/steps2/tvmovietracker" alt="Latest release"></a>
+  <img src="https://github.com/steps2/tvmovietracker/actions/workflows/build-apk.yml/badge.svg" alt="Build status">
+  <img src="https://img.shields.io/github/license/steps2/tvmovietracker" alt="GPL-3.0 licence">
 </p>
 
 ## Screenshots
@@ -44,7 +44,7 @@
 
 Requires Android 5.0 (API 21) or newer.
 
-Download the APK from the **[latest release](https://github.com/steps2/droidshows/releases/latest)** — it installs over any previous 1.x version.
+Download the APK from the **[latest release](https://github.com/steps2/tvmovietracker/releases/latest)** — it installs over any previous 1.x version.
 
 > **Coming from the old beta builds?** The app now ships under the new package name `app.tvmovie.tracker`, so it installs *alongside* the old beta rather than over it. To move your data: in the old app use **Back up now**, install the new version, then **Restore** — everything carries over.
 
