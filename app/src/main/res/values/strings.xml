@@ -12,6 +12,9 @@
 <string name="menu_undo">Undo</string>
 <string name="menu_add_serie">Add a show</string>
 <string name="menu_update">Sync shows</string>
+<string name="menu_refresh_posters">Refresh posters</string>
+<string name="posters_refreshed">Posters refreshed</string>
+<string name="poster_refresh_running">Poster refresh already running</string>
 <string name="menu_search">Search</string>
 <string name="menu_sort_by_name">Sort by name</string>
 <string name="menu_sort_by_unseen">Sort by unseen</string>

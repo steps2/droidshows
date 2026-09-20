@@ -27,11 +27,15 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import app.tvmovie.tracker.R;
 import app.tvmovie.tracker.provider.JsonFetcher;
@@ -131,6 +135,13 @@ public class DroidShows extends AppCompatActivity
 	 * Keyed by poster file path; evicted when a poster is re-downloaded. */
 	private static final ExecutorService POSTER_POOL = Executors.newFixedThreadPool(4);
 	private static final LruCache<String, Drawable> POSTER_DRAWABLE_CACHE = new LruCache<String, Drawable>(64);
+	/* Shows already queued for an on-demand poster re-download (the library
+	 * list heals itself Discover-style when a row binds with no poster file).
+	 * Guards against duplicate work and retry storms while scrolling. */
+	private static final Set<String> posterFetchQueued = Collections.synchronizedSet(new HashSet<String>());
+	/* True while the manual "Refresh posters" pass is running; the + menu
+	 * item refuses to start a second one. */
+	private static final AtomicBoolean posterRefreshRunning = new AtomicBoolean(false);
 
 	// Load a vector menu icon through AppCompatResources so vectors render on
 	// the whole minSdk-14 range.
@@ -174,6 +185,7 @@ public class DroidShows extends AppCompatActivity
 	private static final int EXIT_MENU_ITEM = OPTIONS_MENU_ITEM + 1;
 	private static final int BACKUP_NOW_MENU_ITEM = EXIT_MENU_ITEM + 1;
 	private static final int DISCOVER_MENU_ITEM = BACKUP_NOW_MENU_ITEM + 1;
+	private static final int REFRESH_POSTERS_MENU_ITEM = DISCOVER_MENU_ITEM + 1;
 	private static final int REQ_RESTORE_BACKUP = 1001;
 	private static final int REQ_BACKUP_NOW = 1002;
 	/* Context Menus */
@@ -810,13 +822,14 @@ public class DroidShows extends AppCompatActivity
 		menu.add(0, DISCOVER_MENU_ITEM, 1, getString(R.string.discover)).setIcon(menuIcon(R.drawable.ic_discover_compass));
 		menu.add(0, SEARCH_MENU_ITEM, 2, getString(R.string.menu_search)).setIcon(menuIcon(R.drawable.ic_menu_search));
 		menu.add(0, UPDATEALL_MENU_ITEM, 3, "").setIcon(menuIcon(R.drawable.ic_menu_sync));
-		menu.add(0, FILTER_MENU_ITEM, 4, "").setIcon(menuIcon(R.drawable.ic_menu_filter_list));
-		menu.add(0, SORT_MENU_ITEM, 5, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
-		menu.add(0, SEEN_MENU_ITEM, 6, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
-		menu.add(0, UNDO_MENU_ITEM, 7, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
-		menu.add(0, OPTIONS_MENU_ITEM, 8, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
-		menu.add(0, BACKUP_NOW_MENU_ITEM, 9, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
-		menu.add(0, EXIT_MENU_ITEM, 10, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
+		menu.add(0, REFRESH_POSTERS_MENU_ITEM, 4, getString(R.string.menu_refresh_posters)).setIcon(menuIcon(R.drawable.ic_menu_sync));
+		menu.add(0, FILTER_MENU_ITEM, 5, "").setIcon(menuIcon(R.drawable.ic_menu_filter_list));
+		menu.add(0, SORT_MENU_ITEM, 6, "").setIcon(menuIcon(R.drawable.ic_menu_sort));
+		menu.add(0, SEEN_MENU_ITEM, 7, "").setIcon(menuIcon(R.drawable.ic_menu_visibility));
+		menu.add(0, UNDO_MENU_ITEM, 8, getString(R.string.menu_undo)).setIcon(menuIcon(R.drawable.ic_menu_undo));
+		menu.add(0, OPTIONS_MENU_ITEM, 9, getString(R.string.menu_about)).setIcon(menuIcon(R.drawable.ic_menu_settings));
+		menu.add(0, BACKUP_NOW_MENU_ITEM, 10, getString(R.string.menu_backup_now)).setIcon(menuIcon(R.drawable.ic_menu_backup));
+		menu.add(0, EXIT_MENU_ITEM, 11, getString(R.string.menu_exit)).setIcon(menuIcon(R.drawable.ic_menu_exit_to_app));
 	}
 
 	private void preparePlusMenu(Menu menu) {
@@ -825,6 +838,8 @@ public class DroidShows extends AppCompatActivity
 		menu.findItem(UPDATEALL_MENU_ITEM)
 			.setEnabled(!logMode)
 			.setTitle(mediaType == 1 ? R.string.menu_update_movies : R.string.menu_update);
+		menu.findItem(REFRESH_POSTERS_MENU_ITEM)
+			.setEnabled(!logMode && !posterRefreshRunning.get());
 		menu.findItem(ADD_SERIE_MENU_ITEM)
 			.setTitle(mediaType == 1 ? R.string.menu_add_movie : R.string.menu_add_serie);
 		menu.findItem(FILTER_MENU_ITEM)
@@ -897,6 +912,9 @@ public class DroidShows extends AppCompatActivity
 				break;
 			case UPDATEALL_MENU_ITEM :
 				updateAllSeriesDialog();
+				break;
+			case REFRESH_POSTERS_MENU_ITEM :
+				refreshAllPosters();
 				break;
 			case OPTIONS_MENU_ITEM :
 				aboutDialog();
@@ -2313,6 +2331,169 @@ public class DroidShows extends AppCompatActivity
 		}
 	}
 
+	/* Current series.posterThumb for a show, re-read from the DB. Used to
+	 * repair a list row whose in-memory path went stale (e.g. the startup
+	 * poster migration rewrote it after the row was built). */
+	private String dbPosterPath(String serieId) {
+		Cursor c = null;
+		try {
+			c = db.Query("SELECT posterThumb FROM series WHERE id='" + serieId + "'");
+			if (c != null && c.moveToFirst())
+				return c.getString(0);
+		} catch (Exception e) {
+			Log.e(TAG, "dbPosterPath failed for " + serieId, e);
+		} finally {
+			if (c != null)
+				c.close();
+		}
+		return null;
+	}
+
+	/* Fetch the online show/movie record and (re-)download its poster through
+	 * the atomic updatePosterThumb path (temp file, verify, rename). Returns
+	 * the DB posterThumb afterwards, null when nothing could be fetched.
+	 * Call from a background thread. */
+	private String downloadPosterForShow(String serieId, int mediaType, boolean force) {
+		Serie sToUpdate = null;
+		if (mediaType == 1) {
+			String apiKey = sharedPrefs.getString(TMDB_API_KEY_NAME, "");
+			if (apiKey != null && !apiKey.isEmpty())
+				sToUpdate = new TMDB(apiKey).getMovie(serieId);
+		} else {
+			TVMaze tvMaze = new TVMaze();
+			String tvmazeId = resolveTvmazeId(tvMaze, serieId);
+			if (tvmazeId != null && !tvmazeId.isEmpty()) {
+				sToUpdate = getTVMazeShow(tvMaze, tvmazeId);
+				if (sToUpdate != null) {	// keep the existing DB row; TVMaze id goes to tvmazeId
+					sToUpdate.setId(serieId);
+					sToUpdate.setTvmazeId(tvmazeId);
+				}
+			}
+		}
+		if (sToUpdate == null)
+			return null;
+		updatePosterThumb(serieId, sToUpdate, force);
+		return dbPosterPath(serieId);
+	}
+
+	/* On-demand poster fetch for a single library row whose poster file is
+	 * missing or undecodable: the library list heals itself Discover-style as
+	 * the user scrolls. Each show is tried at most once per process (guarded
+	 * by posterFetchQueued) so a show with no online poster can't cause a
+	 * retry storm. Call from any thread. */
+	private void fetchPosterForShow(final String serieId, final int mediaType) {
+		if (serieId == null || serieId.isEmpty() || !posterFetchQueued.add(serieId))
+			return;
+		POSTER_POOL.execute(new Runnable() {
+			public void run() {
+				String freshPath = null;
+				try {
+					freshPath = downloadPosterForShow(serieId, mediaType, false);
+				} catch (Exception e) {
+					Log.e(TAG, "on-demand poster fetch failed for " + serieId, e);
+				}
+				final String newPath = freshPath;
+				runOnUiThread(new Runnable() {
+					public void run() {
+						if (isFinishing())
+							return;
+						if (newPath != null) {
+							synchronized (series) {
+								for (TVShowItem item : series) {
+									if (serieId.equals(item.getSerieId())) {
+										POSTER_DRAWABLE_CACHE.remove(item.getIcon());
+										item.setIcon(newPath);
+										item.setDIcon(null);
+									}
+								}
+							}
+						}
+						seriesAdapter.notifyDataSetChanged();
+					}
+				});
+			}
+		});
+	}
+
+	/* "Refresh posters" (+ menu): force a re-download of every library show
+	 * and movie poster through the atomic updatePosterThumb path, in parallel
+	 * on the 4-thread poster pool (Discover-style speed). The thin
+	 * non-blocking progress bar runs at the top of the list until it
+	 * finishes; the list then rebuilds and a toast confirms. Guarded against
+	 * double-tap. Call from the UI thread. */
+	private void refreshAllPosters() {
+		if (!posterRefreshRunning.compareAndSet(false, true)) {
+			Toast.makeText(this, R.string.poster_refresh_running, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		if (!utils.isNetworkAvailable(this)) {
+			posterRefreshRunning.set(false);
+			Toast.makeText(this, R.string.messages_no_internet, Toast.LENGTH_LONG).show();
+			return;
+		}
+		new Thread(new Runnable() {
+			public void run() {
+				final List<String[]> all = new ArrayList<String[]>();
+				Cursor c = null;
+				try {
+					c = db.Query("SELECT id, mediaType FROM series");
+					if (c != null && c.moveToFirst()) {
+						do {
+							all.add(new String[] { c.getString(0), c.getString(1) });
+						} while (c.moveToNext());
+					}
+				} catch (Exception e) {
+					Log.e(SQLiteStore.TAG, "Error collecting shows for poster refresh", e);
+				} finally {
+					if (c != null)
+						c.close();
+				}
+				if (all.isEmpty() || isFinishing()) {
+					posterRefreshRunning.set(false);
+					return;
+				}
+				runOnUiThread(new Runnable() {
+					public void run() {
+						showTopProgress(false, all.size());
+					}
+				});
+				final AtomicInteger done = new AtomicInteger(0);
+				final CountDownLatch latch = new CountDownLatch(all.size());
+				for (final String[] s : all) {
+					POSTER_POOL.execute(new Runnable() {
+						public void run() {
+							try {
+								downloadPosterForShow(s[0], "1".equals(s[1]) ? 1 : 0, true);
+							} catch (Exception e) {
+								Log.e(SQLiteStore.TAG, "Poster refresh failed for show " + s[0], e);
+							} finally {
+								final int p = done.incrementAndGet();
+								runOnUiThread(new Runnable() {
+									public void run() {
+										setTopProgress(p);
+									}
+								});
+								latch.countDown();
+							}
+						}
+					});
+				}
+				try {
+					latch.await();
+				} catch (InterruptedException e) {
+				}
+				posterRefreshRunning.set(false);
+				runOnUiThread(new Runnable() {
+					public void run() {
+						hideTopProgress();
+						getSeries();
+						Toast.makeText(DroidShows.this, R.string.posters_refreshed, Toast.LENGTH_SHORT).show();
+					}
+				});
+			}
+		}).start();
+	}
+
 	/*
 	 * Re-download posters for library shows whose poster file is missing
 	 * (e.g. after a restore wiped the poster cache). Only shows without a
@@ -2396,6 +2577,15 @@ public class DroidShows extends AppCompatActivity
 
 	@SuppressWarnings("deprecation")
 	public void updatePosterThumb(String serieId, Serie sToUpdate) {
+		updatePosterThumb(serieId, sToUpdate, false);
+	}
+
+	/* force=true re-downloads even when the DB thinks the poster is cached:
+	 * used by the manual "Refresh posters" pass. The download still goes to
+	 * a .tmp file and is verified before replacing the live file, so a failed
+	 * download never leaves the show poster-less. */
+	@SuppressWarnings("deprecation")
+	public void updatePosterThumb(String serieId, Serie sToUpdate, boolean force) {
 		Cursor c = DroidShows.db.Query("SELECT posterInCache, poster, posterThumb FROM series WHERE id='"+ serieId +"'");
 		if (c == null || !c.moveToFirst()) {
 			if (c != null) c.close();
@@ -2406,7 +2596,7 @@ public class DroidShows extends AppCompatActivity
 		String posterThumbPath = c.getString(2);
 		c.close();
 		URL posterURL = null;
-		boolean thumbCached = "true".equals(posterInCache) && posterThumbPath != null && new File(posterThumbPath).exists();
+		boolean thumbCached = !force && "true".equals(posterInCache) && posterThumbPath != null && new File(posterThumbPath).exists();
 		if (!thumbCached) {
 			poster = sToUpdate.getPoster();
 			if (poster == null)
@@ -3028,6 +3218,28 @@ public class DroidShows extends AppCompatActivity
 			iconView.setImageResource(R.drawable.noposter);
 			POSTER_POOL.execute(new Runnable() {
 				public void run() {
+					final File f = new File(path);
+					if (!f.exists()) {
+						/* No local file: the DB path may have moved under this
+						 * row (the 1.1.1 startup migration rewrites
+						 * series.posterThumb after the list is built). Re-read
+						 * it before hitting the network; otherwise heal on
+						 * demand, Discover-style. */
+						final String dbPath = dbPosterPath(serie.getSerieId());
+						if (dbPath != null && !dbPath.equals(path) && new File(dbPath).exists()) {
+							runOnUiThread(new Runnable() {
+								public void run() {
+									serie.setIcon(dbPath);
+									serie.setDIcon(null);
+									if (dbPath.equals(iconView.getTag()))
+										bindPoster(iconView, serie);
+								}
+							});
+						} else {
+							fetchPosterForShow(serie.getSerieId(), serie.getMediaType());
+						}
+						return;
+					}
 					final Drawable d;
 					try {
 						d = Drawable.createFromPath(path);
@@ -3036,11 +3248,12 @@ public class DroidShows extends AppCompatActivity
 						return;
 					}
 					if (d == null) {
-						/* File exists but is not a decodable image: drop it so
-						 * the next refreshMissingPosters() re-downloads it. */
+						/* File exists but is not a decodable image: drop it and
+						 * re-download on demand. */
 						try {
-							new File(path).delete();
+							f.delete();
 						} catch (Exception ignored) {}
+						fetchPosterForShow(serie.getSerieId(), serie.getMediaType());
 						return;
 					}
 					POSTER_DRAWABLE_CACHE.put(path, d);

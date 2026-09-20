@@ -10,8 +10,8 @@ android {
 
         // versionCode 71110     // original andoid 2.3 api 9 version
         // versionName "7.11.10" // original andoid 2.3 api 9 version
-        versionCode 10101            // 1.1.1: poster loading and storage fixes
-        versionName "1.1.1"          // fresh numbering for the renamed app
+        versionCode 10102            // 1.1.2: poster on-demand heal + Refresh posters menu item
+        versionName "1.1.2"          // fresh numbering for the renamed app
 
         vectorDrawables.useSupportLibrary = true
     }
