@@ -52,6 +52,14 @@ TV Movie Tracker is an Android app for keeping track of the TV shows and movies 
 - Library posters are stored in persistent app storage, so "Clear cache" can never wipe them
 - Available in English, German, Spanish, French, Italian, Dutch and Russian
 
+## Screenshots
+
+| TV Shows · Watching | Discover | Statistics | Calendar |
+|---|---|---|---|
+| <img src="screenshots/watching-shows.png" width="180"> | <img src="screenshots/discover.png" width="180"> | <img src="screenshots/statistics.png" width="180"> | <img src="screenshots/calendar.png" width="180"> |
+| Movies · Watching | Finished | History | Settings |
+| <img src="screenshots/watching-movies.png" width="180"> | <img src="screenshots/finished.png" width="180"> | <img src="screenshots/history.png" width="180"> | <img src="screenshots/settings.png" width="180"> |
+
 ## Installation
 
 Download the APK from the **[latest release](https://github.com/steps2/droidshows/releases/latest)** — it installs over any previous 1.x version.
