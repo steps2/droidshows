@@ -7,7 +7,9 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
 import android.widget.LinearLayout;
+import android.view.View;
 import android.widget.TextView;
+import com.google.android.material.appbar.MaterialToolbar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +42,10 @@ public class StatsActivity extends Activity {
 		app.tvmovie.tracker.ThemeHelper.applyTheme(this);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.stats);
+		MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
+		toolbar.setNavigationOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) { finish(); }
+		});
 		db = SQLiteStore.getInstance(this);
 		DroidShowsApp.beginOperation(true, 0);
 		new Thread(new Runnable() {
@@ -166,9 +172,9 @@ public class StatsActivity extends Activity {
 		addRow(container, getString(R.string.stats_hours_watched),
 				String.format(java.util.Locale.US, "%.1f", st.hoursWatched));
 		addRow(container, getString(R.string.stats_current_streak),
-				String.format(getString(R.string.stats_days), st.currentStreak));
+				getResources().getQuantityString(R.plurals.stats_days, st.currentStreak, st.currentStreak));
 		addRow(container, getString(R.string.stats_longest_streak),
-				String.format(getString(R.string.stats_days), st.longestStreak));
+				getResources().getQuantityString(R.plurals.stats_days, st.longestStreak, st.longestStreak));
 		addRow(container, getString(R.string.stats_watching) + " \u00b7 " + getString(R.string.stats_shows),
 				String.valueOf(st.watchingShows));
 		addRow(container, getString(R.string.stats_finished) + " \u00b7 " + getString(R.string.stats_shows),

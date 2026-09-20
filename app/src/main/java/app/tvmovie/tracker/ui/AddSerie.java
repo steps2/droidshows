@@ -36,6 +36,7 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import com.google.android.material.appbar.MaterialToolbar;
 import android.view.ViewGroup;
 import android.view.ContextMenu.ContextMenuInfo;
 import androidx.appcompat.content.res.AppCompatResources;
@@ -90,6 +91,10 @@ public class AddSerie extends AppCompatActivity
 		app.tvmovie.tracker.ThemeHelper.applyTheme(this);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.add_serie);
+		MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
+		toolbar.setNavigationOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) { finish(); }
+		});
 		searchView = (androidx.appcompat.widget.SearchView) findViewById(R.id.add_serie_searchview);
 		searchView.setIconifiedByDefault(false);
 		searchView.setOnQueryTextListener(new androidx.appcompat.widget.SearchView.OnQueryTextListener() {

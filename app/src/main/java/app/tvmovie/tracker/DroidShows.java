@@ -2916,10 +2916,10 @@ public class DroidShows extends AppCompatActivity
 				for (int i = 0; i < episodes.size(); i++)
 					series.add(episodes.get(i));
 			}
-			String mediaTitle = (mediaType == 1 ? getString(R.string.media_movies) : getString(R.string.media_tv_shows));
-			String modeTitle = (!logMode ? (showArchive == 1 ? " - "+ getString(R.string.mode_finished) : "") :
-					" - "+ getString(R.string.menu_log));
-			setTitle(getString(R.string.layout_app_name) +" - "+ mediaTitle + modeTitle);
+			// Toolbar title: the TV Shows screen keeps the app name; the Movies section shows "Movies".
+			MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
+			if (toolbar != null) toolbar.setTitle(mediaType == 1
+					? getString(R.string.media_movies) : getString(R.string.layout_app_name));
 			runOnUiThread(updateListView);
 		} catch (Exception e) {
 			Log.e(SQLiteStore.TAG, "Error populating TVShowItems or no shows added yet");
@@ -3132,8 +3132,8 @@ public class DroidShows extends AppCompatActivity
 
 	@Override
 	public boolean onSearchRequested() {
-		if (logMode)
-			return false;
+		// Search works in the History tab too: getSeries() honours logMode and the
+		// adapter filter matches item names in every tab.
 		if (findViewById(R.id.search).getVisibility() != View.VISIBLE) {
 			findViewById(R.id.search).setVisibility(View.VISIBLE);
 			getSeries(2, false);	// 2 = archive and current shows, false = don't filter networks

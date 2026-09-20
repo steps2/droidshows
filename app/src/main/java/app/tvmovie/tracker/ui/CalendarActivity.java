@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import com.google.android.material.appbar.MaterialToolbar;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -54,6 +55,10 @@ public class CalendarActivity extends Activity {
 		app.tvmovie.tracker.ThemeHelper.applyTheme(this);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.calendar);
+		MaterialToolbar toolbar = (MaterialToolbar) findViewById(R.id.toolbar);
+		toolbar.setNavigationOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) { finish(); }
+		});
 		db = SQLiteStore.getInstance(this);
 		Calendar now = Calendar.getInstance();
 		year = now.get(Calendar.YEAR);
