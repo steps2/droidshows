@@ -10,8 +10,8 @@ android {
 
         // versionCode 71110     // original andoid 2.3 api 9 version
         // versionName "7.11.10" // original andoid 2.3 api 9 version
-        versionCode 10104            // 1.1.4: Add movie title, kill top gap on add screens
-        versionName "1.1.4"          // fresh numbering for the renamed app
+        versionCode 10105            // 1.1.5: repo rename link fixes (steps2/tvmovietracker)
+        versionName "1.1.5"          // fresh numbering for the renamed app
 
         vectorDrawables.useSupportLibrary = true
     }
