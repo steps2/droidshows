@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/steps2/droidshows/releases/latest"><img src="https://img.shields.io/github/v/release/steps2/droidshows" alt="Latest release"></a>
-  <img src="https://github.com/steps2/droidshows/actions/workflows/android.yml/badge.svg" alt="Build status">
+  <img src="https://github.com/steps2/droidshows/actions/workflows/build-apk.yml/badge.svg" alt="Build status">
   <img src="https://img.shields.io/github/license/steps2/droidshows" alt="GPL-3.0 licence">
 </p>
 
