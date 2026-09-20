@@ -79,6 +79,7 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.util.LruCache;
 import android.view.ContextMenu;
 import android.view.GestureDetector;
 import android.view.GestureDetector.SimpleOnGestureListener;
@@ -124,6 +125,12 @@ import app.tvmovie.tracker.ui.HamburgerDrawable;
 public class DroidShows extends AppCompatActivity
 {
 	private static final String TAG = "DroidShows";
+
+	/* Library poster drawables, decoded off the UI thread (the old code did
+	 * Drawable.createFromPath() inside getView, stalling every scroll).
+	 * Keyed by poster file path; evicted when a poster is re-downloaded. */
+	private static final ExecutorService POSTER_POOL = Executors.newFixedThreadPool(4);
+	private static final LruCache<String, Drawable> POSTER_DRAWABLE_CACHE = new LruCache<String, Drawable>(64);
 
 	// Load a vector menu icon through AppCompatResources so vectors render on
 	// the whole minSdk-14 range.
@@ -282,10 +289,11 @@ public class DroidShows extends AppCompatActivity
 		setContentView(R.layout.main);
 		main = findViewById(R.id.main);
 		db = SQLiteStore.getInstance(this);
-		// One-time move of poster files from the old files-dir location to the
-		// cache dir (plus the matching DB path rewrite), split library and
-		// Discover posters, then prune the Discover cache to its size cap.
-		// cache to its size cap. Runs off the UI thread: file I/O + DB write.
+		// One-time poster moves: old files-dir location -> cache dir, split
+		// library and Discover posters, then move library posters to the
+		// persistent files dir (safe from "Clear cache"), then prune the
+		// Discover cache to its size cap. Runs off the UI thread: file I/O
+		// + DB write.
 		new Thread(new Runnable() {
 			public void run() {
 				try {
@@ -297,6 +305,8 @@ public class DroidShows extends AppCompatActivity
 					// library posters -> thumbs/library (never pruned),
 					// everything else -> thumbs/discover (capped)
 					Utils.organizePosterCache(getApplicationContext(), db);
+					// library posters -> files/posters (never cleared with cache)
+					Utils.migrateLibraryPostersToFilesDir(getApplicationContext(), db);
 					Utils.prunePosterCache(getApplicationContext());
 				} catch (Exception e) {
 					Log.e(SQLiteStore.TAG, "poster cache migration failed", e);
@@ -1452,6 +1462,7 @@ public class DroidShows extends AppCompatActivity
 					}
 					// posters cached for another install are stale
 					Utils.clearPosterCache(getApplicationContext());
+					POSTER_DRAWABLE_CACHE.evictAll();
 				} catch (Exception e) {
 					Log.e(SQLiteStore.TAG, "Error restoring backup", e);
 					try { db.openDataBase(); } catch (Exception e2) {}
@@ -2400,30 +2411,34 @@ public class DroidShows extends AppCompatActivity
 			poster = sToUpdate.getPoster();
 			if (poster == null)
 				return;
+			/* The old file is only removed after the new poster is fully
+			 * downloaded and verified (see below): a failed download must
+			 * never leave the show poster-less. */
+			String oldThumbPath = posterThumbPath;
 			try {
 				posterURL = new URL(poster);
-				if (posterThumbPath != null)
-					new File(posterThumbPath).delete();
 				posterThumbPath = Utils.libraryPosterFile(getApplicationContext(), posterURL).getAbsolutePath();
-				} catch (MalformedURLException e) {
-					Log.e(SQLiteStore.TAG, sToUpdate.getSerieName() +" doesn't have a poster URL");
-					e.printStackTrace();
-					return;
-				}
-				File posterThumbFile = null;
-				try {
-					posterThumbFile = new File(posterThumbPath);
-					Utils.downloadPosterThumb(getApplicationContext(), posterURL, posterThumbFile);
-				} catch (IOException e) {
-					Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
-					e.printStackTrace();
-					return;
-				}
-				Bitmap posterThumb = BitmapFactory.decodeFile(posterThumbPath);
-				if (posterThumb == null) {
-					Log.e(SQLiteStore.TAG, "Corrupt or unknown poster file type: "+ posterThumbPath);
-					return;
-				}
+			} catch (MalformedURLException e) {
+				Log.e(SQLiteStore.TAG, sToUpdate.getSerieName() +" doesn't have a poster URL");
+				e.printStackTrace();
+				return;
+			}
+			File posterThumbFile = new File(posterThumbPath);
+			File tmpFile = new File(posterThumbPath + ".tmp");
+			try {
+				Utils.downloadPosterThumb(getApplicationContext(), posterURL, tmpFile);
+			} catch (IOException e) {
+				tmpFile.delete();
+				Log.e(SQLiteStore.TAG, "Could not download poster: "+ posterURL);
+				e.printStackTrace();
+				return;
+			}
+			Bitmap posterThumb = BitmapFactory.decodeFile(tmpFile.getAbsolutePath());
+			if (posterThumb == null) {
+				tmpFile.delete();
+				Log.e(SQLiteStore.TAG, "Corrupt or unknown poster file type: "+ posterThumbPath);
+				return;
+			}
 				int width = getWindowManager().getDefaultDisplay().getWidth();
 				int height = getWindowManager().getDefaultDisplay().getHeight();
 				int newHeight = (int) ((height > width ? height : width) * 0.265);
@@ -2431,12 +2446,26 @@ public class DroidShows extends AppCompatActivity
 				Bitmap resizedBitmap = Bitmap.createScaledBitmap(posterThumb, newWidth, newHeight, true);
 				OutputStream fOut = null;
 				try {
-					fOut = new FileOutputStream(posterThumbFile, false);
+					fOut = new FileOutputStream(tmpFile, false);
 					resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, fOut);
 					fOut.flush();
 					fOut.close();
+					/* Swap the verified new poster into place, then drop the
+					 * superseded file (when the URL changed) and the stale
+					 * decoded drawable so the new poster shows at once. */
+					if (posterThumbFile.exists() && !posterThumbFile.delete())
+						Log.w(SQLiteStore.TAG, "Could not delete old poster: "+ posterThumbFile);
+					if (!tmpFile.renameTo(posterThumbFile)) {
+						Log.e(SQLiteStore.TAG, "Could not move new poster into place: "+ tmpFile);
+						tmpFile.delete();
+						return;
+					}
 					db.execQuery("UPDATE series SET posterInCache='true', poster='"+ poster
 						+"', posterThumb='"+ posterThumbPath +"' WHERE id='"+ serieId +"'");
+					POSTER_DRAWABLE_CACHE.remove(posterThumbPath);
+					if (oldThumbPath != null && !oldThumbPath.isEmpty()
+							&& !oldThumbPath.equals(posterThumbPath))
+						new File(oldThumbPath).delete();
 					Log.d(SQLiteStore.TAG, "Updated poster thumb for "+ sToUpdate.getSerieName());
 				} catch (FileNotFoundException e) {
 					Log.e(SQLiteStore.TAG, "File not found:"+ posterThumbFile);
@@ -2973,6 +3002,60 @@ public class DroidShows extends AppCompatActivity
 		private ShowsFilter filter;
 		private boolean isFiltered;
 		private LayoutInflater vi = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+
+		/* Paint the row's poster without ever decoding on the UI thread.
+		 * Fast paths first (per-item drawable, then the shared decode cache);
+		 * on a miss the placeholder shows and a pooled worker decodes the
+		 * file, applying it only if the recycled row still wants this path. */
+		private void bindPoster(final app.tvmovie.tracker.ui.IconView iconView, final TVShowItem serie) {
+			if (iconView == null) return;
+			Drawable icon = serie.getDIcon();
+			final String path = serie.getIcon();
+			if (icon == null && path != null && !path.isEmpty())
+				icon = POSTER_DRAWABLE_CACHE.get(path);
+			if (icon != null) {
+				iconView.setTag(null);
+				iconView.setImageDrawable(icon);
+				serie.setDIcon(icon);
+				return;
+			}
+			if (path == null || path.isEmpty()) {
+				iconView.setTag(null);
+				iconView.setImageResource(R.drawable.noposter);
+				return;
+			}
+			iconView.setTag(path);
+			iconView.setImageResource(R.drawable.noposter);
+			POSTER_POOL.execute(new Runnable() {
+				public void run() {
+					final Drawable d;
+					try {
+						d = Drawable.createFromPath(path);
+					} catch (Exception e) {
+						Log.e(TAG, "poster decode failed: " + path, e);
+						return;
+					}
+					if (d == null) {
+						/* File exists but is not a decodable image: drop it so
+						 * the next refreshMissingPosters() re-downloads it. */
+						try {
+							new File(path).delete();
+						} catch (Exception ignored) {}
+						return;
+					}
+					POSTER_DRAWABLE_CACHE.put(path, d);
+					runOnUiThread(new Runnable() {
+						public void run() {
+							serie.setDIcon(d);
+							if (path.equals(iconView.getTag())) {
+								iconView.setTag(null);
+								iconView.setImageDrawable(d);
+							}
+						}
+					});
+				}
+			});
+		}
 		private int iconListPosition;
 		private ColorStateList textViewColors = new TextView(getContext()).getTextColors();
 
@@ -3151,17 +3234,7 @@ public class DroidShows extends AppCompatActivity
 						holder.watched.setTag(null);
 					}
 				}
-				if (holder.icon != null) {
-					Drawable icon = serie.getDIcon();
-					if (icon == null && !serie.getIcon().equals(""))
-						icon = Drawable.createFromPath(serie.getIcon());
-					if (icon == null) {
-						holder.icon.setImageResource(R.drawable.noposter);
-					} else {
-						holder.icon.setImageDrawable(icon);
-						serie.setDIcon(icon);
-					}
-				}
+				bindPoster(holder.icon, serie);
 			} else {
 				setTextColMargin(holder, false);
 				if (holder.watched != null) {
@@ -3181,17 +3254,7 @@ public class DroidShows extends AppCompatActivity
 					holder.sne.setEnabled(true);
 					holder.sne.setText(serie.getEpisodeSeen());
 				}
-				if (holder.icon != null) {
-					Drawable icon = serie.getDIcon();
-					if (icon == null && !serie.getIcon().equals(""))
-						icon = Drawable.createFromPath(serie.getIcon());
-					if (icon == null) {
-						holder.icon.setImageResource(R.drawable.noposter);
-					} else {
-						holder.icon.setImageDrawable(icon);
-						serie.setDIcon(icon);
-					}
-				}
+				bindPoster(holder.icon, serie);
 			}
 			bindRowSwipe(holder, serie);
 			return convertView;

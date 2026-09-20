@@ -85,13 +85,12 @@ public class Utils
 		}
 	}
 
-	/* Poster storage: everything lives under the app cache dir so posters
-	 * count as cache (clearable, reclaimable by the OS) instead of permanent
-	 * app data. Library posters (shows/movies the user added) are kept
-	 * permanently under thumbs/library and are never pruned. Discover
-	 * posters are disposable: they live under thumbs/discover, capped at the
-	 * user-chosen size (minimum 50MB) with oldest-first eviction; a pruned
-	 * poster simply re-downloads on demand. */
+	/* Poster storage: library posters (shows/movies the user added) live under
+	 * getFilesDir()/posters so Android "Clear cache" and low-storage wipes can
+	 * never delete them; they are never pruned by the app either. Discover
+	 * posters are disposable: they live under getCacheDir()/thumbs/discover,
+	 * capped at the user-chosen size (minimum 50MB) with oldest-first
+	 * eviction; a pruned poster simply re-downloads on demand. */
 	public static final String PREFS_NAME = "DroidShowsPref";
 	public static final String POSTER_CACHE_SIZE_KEY = "poster_cache_size_mb";
 	public static final long POSTER_CACHE_MIN_MB = 50;
@@ -122,6 +121,14 @@ public class Utils
 
 	public static File discoverPosterDir(Context ctx) {
 		return new File(posterDir(ctx), "discover");
+	}
+
+	/** Persistent home for library posters. This is under getFilesDir(), NOT
+	 *  the cache dir: Android Settings "Clear cache" and low-storage wipes
+	 *  must never eat the user's show/movie posters. Discover posters stay
+	 *  in the cache dir (disposable by design). */
+	public static File libraryPosterDir(Context ctx) {
+		return new File(ctx.getFilesDir(), "posters");
 	}
 
 	/** Cache file for a library poster at url. */
@@ -215,9 +222,60 @@ public class Utils
 		return src.renameTo(dest);
 	}
 
-	/** Whole poster cache (used after a restore: everything is stale). */
+	/** One-time move of library posters from the old cache-dir location
+	 *  (thumbs/library) to the persistent files-dir location (posters/).
+	 *  Rewrites series.posterThumb to the new absolute paths. Idempotent:
+	 *  once thumbs/library is gone there is nothing to do. */
+	public static void migrateLibraryPostersToFilesDir(Context ctx, SQLiteStore db) {
+		File oldLib;
+		String oldPrefix;
+		try {
+			oldLib = new File(posterDir(ctx), "library");
+			oldPrefix = oldLib.getCanonicalPath();
+		} catch (IOException e) {
+			return;
+		}
+		if (!oldLib.exists()) return;
+		File newLib = libraryPosterDir(ctx);
+		newLib.mkdirs();
+		String newPrefix;
+		try {
+			newPrefix = newLib.getCanonicalPath();
+		} catch (IOException e) {
+			newPrefix = newLib.getAbsolutePath();
+		}
+		List<File> files = new ArrayList<File>();
+		collectFiles(oldLib, files);
+		boolean movedAny = false;
+		for (File f : files) {
+			String fp;
+			try {
+				fp = f.getCanonicalPath();
+			} catch (IOException e) {
+				continue;
+			}
+			if (!fp.startsWith(oldPrefix + File.separator)) continue;
+			String rel = fp.substring(oldPrefix.length() + 1);
+			if (moveFile(f, new File(newLib, rel))) movedAny = true;
+		}
+		deleteTree(oldLib);
+		if (movedAny) {
+			try {
+				db.execQuery("UPDATE series SET posterThumb = REPLACE(posterThumb, '"
+						+ sqlEsc(oldPrefix + File.separator) + "', '"
+						+ sqlEsc(newPrefix + File.separator) + "')");
+			} catch (Exception e) {
+				Log.e("DroidShows", "migrateLibraryPostersToFilesDir db pass failed", e);
+			}
+		}
+	}
+
+	/** Whole poster cache (used after a restore: everything is stale).
+	 *  Covers both the cache dir (Discover) and the persistent files-dir
+	 *  library posters. */
 	public static void clearPosterCache(Context ctx) {
 		deleteTree(posterDir(ctx));
+		deleteTree(libraryPosterDir(ctx));
 	}
 
 	/** Only the disposable Discover posters; library posters are kept. */
