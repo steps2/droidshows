@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <string name="lang_code">es</string>
-<string name="layout_app_name">TV Movie Tracker</string>
+<string name="layout_app_name">TVMovie Tracker</string>
 <string name="layout_main_no_items">No has añadido series.</string>
 <string name="layout_search_no_items">No se encontró ninguna serie.</string>
 <string name="layout_seasons_no_items">No hay temporadas que mostrar.</string>
@@ -51,7 +51,7 @@
 <string name="crash_title">La aplicación se bloqueó</string>
 <string name="dialog_use_mirror">Utilizar el mirror TheTVDB (Intenta esto si las actualizaciones son demasiado lentas)</string>
 <string name="dialog_restore">Restaurar</string>
-<string name="dialog_restore_now">Restaurar una copia de seguridad eliminará toda la información que tienes actualmente en TV Movie Tracker. ¿Quieres continuar?</string>
+<string name="dialog_restore_now">Restaurar una copia de seguridad eliminará toda la información que tienes actualmente en TVMovie Tracker. ¿Quieres continuar?</string>
 <string name="dialog_restore_done">Base de datos restaurada correctamente</string>
 <string name="dialog_restore_failed">¡No se ha podido restaurar la base de datos!</string>
 <string name="dialog_title_delete">¿Quieres eliminar la serie?</string>

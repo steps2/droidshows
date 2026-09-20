@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <string name="lang_code">it</string>
-<string name="layout_app_name">TV Movie Tracker</string>
+<string name="layout_app_name">TVMovie Tracker</string>
 <string name="layout_main_no_items">Nessuna serie trovata.</string>
 <string name="layout_search_no_items">Nessuna serie trovata.</string>
 <string name="layout_seasons_no_items">Nessuna stagione da mostrare.</string>
@@ -51,7 +51,7 @@
 <string name="dialog_backup_usefolder">Usa per seguridad diaria</string>
 <string name="dialog_use_mirror">Usa un mirror di TheTVDB (prova questo nel caso gli aggiornamenti siano lenti)</string>
 <string name="dialog_restore">Ripristina</string>
-<string name="dialog_restore_now">Ripristinare un backup rimuoverà tutte le informazioni correnti in TV Movie Tracker. Continuare?</string>
+<string name="dialog_restore_now">Ripristinare un backup rimuoverà tutte le informazioni correnti in TVMovie Tracker. Continuare?</string>
 <string name="dialog_restore_done">Database ripristinato con successo</string>
 <string name="dialog_restore_failed">Impossibile ripristinare il database!</string>
 <string name="dialog_title_delete">Eliminare serie?</string>

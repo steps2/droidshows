@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 <string name="lang_code">de</string>
-<string name="layout_app_name">TV Movie Tracker</string>
+<string name="layout_app_name">TVMovie Tracker</string>
 <string name="layout_main_no_items">Keine Serien gefunden.</string>
 <string name="layout_search_no_items">Keine Serien gefunden.</string>
 <string name="layout_seasons_no_items">Keine Staffeln gefunden.</string>
@@ -51,7 +51,7 @@
 <string name="crash_title">App abgestürzt</string>
 <string name="dialog_use_mirror">TheTVDB Spiegel verwenden (falls Updates zu lange dauern)</string>
 <string name="dialog_restore">Einlesen</string>
-<string name="dialog_restore_now">Während der Datenwiederherstellung werden alle Daten in TV Movie Tracker überschrieben. Fortfahren?</string>
+<string name="dialog_restore_now">Während der Datenwiederherstellung werden alle Daten in TVMovie Tracker überschrieben. Fortfahren?</string>
 <string name="dialog_restore_done">Datenwiederherstellung fertig</string>
 <string name="dialog_restore_failed">Datenwiederherstellung fehlgeschlagen!</string>
 <string name="dialog_title_delete">Serie löschen?</string>
