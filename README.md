@@ -1,112 +1,68 @@
-### New users: consider Android Tiny Television Time Tracker
+<p align="center">
+  <img src="screenshots/app-icon.png" width="120" alt="TV Movie Tracker icon">
+</p>
 
-DroidShows still uses an old API version of [TheTVDB](https://thetvdb.com). This worked just fine until recently, but in May 2023, many bugs were introduced into the API (episodes were missing or duplicated). These bugs have now been resolved (as of May 22nd, 2023), but the legacy API will eventually be deprecated.
+<h1 align="center">TV Movie Tracker</h1>
 
-[This fork](https://github.com/warren-bank/Android-Tiny-Television-Time-Tracker/releases) of DroidShows uses [TMDB](https://www.themoviedb.org) to gather the show data instead of TheTVDB and thus should be considered for new users.
+<p align="center">Track every TV show and movie you watch — episodes, films, ratings and what's on next.</p>
 
-# DroidShows<img src="icon/icon6.png" align="right"/><img src="icon/material.png" align="right"/>
-by ltGuillaume: [Codeberg](https://codeberg.org/ltGuillaume) | [GitHub](https://github.com/ltGuillaume) | [Buy me a beer](https://buymeacoff.ee/ltGuillaume) 🍺
+<p align="center">
+  <a href="https://github.com/steps2/droidshows/releases/latest"><img src="https://img.shields.io/github/v/release/steps2/droidshows" alt="Latest release"></a>
+  <img src="https://github.com/steps2/droidshows/actions/workflows/android.yml/badge.svg" alt="Build status">
+  <img src="https://img.shields.io/github/license/steps2/droidshows" alt="GPL-3.0 licence">
+</p>
 
-DroidShows: A Reboot of DroidSeries Offline TV Shows Tracker  
-This fork adds quite a bunch of features, among which an improved interface, a menu overflow button, pinning, quick search and filters, a separate archive/backlog list, a last seen episodes log, swipe gestures, more show information, backup/restore, double episode entries clean-up, faster updating, cover and fan art view, a modern launcher icon and it speeds up responsiveness significantly by (more) efficient SQL queries and some threading. DroidShows only needs an internet connection when updating the show info or watching full-size posters.
+## Screenshots
 
-__Some pointers__:
-* Don't forget to update all shows regularly (pull-to-refresh)
-* Context menu has more options (long-press item or use overflow buttons)
-* Swipe left-to-right to go back  
-__In Shows Overview__:
-* Tap poster for next episode info
-* Double tap for for show info
-* Long-press poster external resource (to \*[url]s directly, or list)
-* Swipe right-to-left to mark next as seen  
-__In Show Details__:
-* Tap poster for full-screen view
-* Click full-screen poster image for fan art
-* Long-press full-screen poster to open in external app  
-__In Show/Episode Details__:
-* Tap IMDb rating to view in IMDb App when installed, or on IMDb's mobile webpage
+| Watching · TV shows | Discover | Statistics | Calendar |
+|---|---|---|---|
+| <img src="screenshots/watching-shows.png" width="180" alt="Watching tab"> | <img src="screenshots/discover.png" width="180" alt="Discover"> | <img src="screenshots/statistics.png" width="180" alt="Statistics"> | <img src="screenshots/calendar.png" width="180" alt="Calendar"> |
+| Watching · Movies | Finished | History | Settings |
+| <img src="screenshots/watching-movies.png" width="180" alt="Movies watching tab"> | <img src="screenshots/finished.png" width="180" alt="Finished tab"> | <img src="screenshots/history.png" width="180" alt="History tab"> | <img src="screenshots/settings.png" width="180" alt="Settings"> |
 
-<a href="https://f-droid.org/repository/browse/?fdid=nl.asymmetrics.droidshows" target="_blank">
-<img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid" height="90"/></a>
+## Features
 
-[Homepage](https://ltguillaume.github.io/DroidShows)  
-[Wiki (FAQ)](https://github.com/ltGuillaume/DroidShows/wiki)  
-[Screenshots & comparison with original DroidSeries](https://gallery.asymmetrics.nl/index.php?sfpg=RHJvaWRTZXJpZXMvKipkNGNiZTJhYzk1NjZmYWIwOTZhYWZiNGM4OWQyMTYyMA)  
-[XDA Forum post / Changelog](https://forum.xda-developers.com/showthread.php?t=3136787)  
-__Download APK__: from XDA forum post, [F-Droid Repository](https://f-droid.org/repository/browse/?fdid=nl.asymmetrics.droidshows) or [here](https://github.com/ltGuillaume/DroidShows/releases)
+- **TV shows and movies, side by side** — each with Watching, Finished and History tabs
+- **Episode tracking** — mark episodes watched, see what's next and when it airs
+- **Discover** — browse trending and popular shows and films, add them with a tap
+- **Search** — find anything in your library, in every tab
+- **New-episode notifications** — get told when a show you follow airs a new episode
+- **Up Next widget** — next unwatched episode per show, right on your home screen
+- **Where to watch** — streaming and purchase options for films (via TMDB)
+- **Statistics** — episodes and hours watched, watch streaks, library counts, average personal rating
+- **Calendar** — month view with air-date dots; tap a day to see what's on
+- **Personal ratings** — rate shows and films in half stars, next to the online score
+- **Swipe actions** — swipe right to archive, swipe left to mark the next episode watched
+- **Sync** — refresh your whole library from TVMaze and TMDB with one tap
+- **Thin progress bar** — syncs and searches never block the app; it stays usable throughout
+- **Backup and restore** — your whole library, including posters, in one file
+- **Posters that survive** — library posters live in persistent storage, so "Clear cache" never wipes them
+- **Themes** — Automatic, Light and Dark with Material You dynamic colours, plus pure-black AMOLED
+- **Seven languages** — English, German, Spanish, French, Italian, Dutch and Russian
 
-![DroidShows Screenshot](/icon/screenshot.png)  
-__Shows Overview__:  
-\+ Put a "\*" before external source URLs to open them directly via a double tap on the poster (e.g. "\*battlestarwiki.org")  
-\+ Optionally show "1x1 | Next airing: 1x4 on Jan 1, 2017" (Left = next episode for you to watch; Right = first episode to be aired)  
-\+ Showing "[aired unwatched] of [total unwatched]"  
-\+ Added separate archive/backlog to keep shows you're not currently watching out of your way  
-\+ Added icon ic_menu_view for show/hide toggled  
-\+ Status of show in details, and † in overview if show is not continuing  
-\+ If show position changed, scroll back to show after [Mark next episode as seen] and Seasons list  
-\+ Option to only update shows' latest season  
-\+ Context items to view show details on FANDOM (Wikia), Rotten Tomatoes, Wikipedia and IMDb  
-\+ Add your own per-show external resources (links to Wikia, blogs etc.)  
-\+ Pin shows to the top of the list for easy access  
-\+ Tap cover for next episode's info, long-press for show info, double tap for external resources  
-\+ Swipe right-to-left to mark next episode as seen (shows confirmation toast)  
-\+ Option to include specials in unwatched count  
-\+ Mark next episode seen via swipe now vibrates  
-\+ Optionally determine next episode by first unseen overall, or by last marked as watched  
-\+ Undo function (until full exit)  
-\+ A log that shows the last shows you've marked as seen
-\+ Showing middot · when all new episodes are aired  
-\+ New show & episode details views  
-\+ View full size poster and fan art  
-\+ Quick search (filter)  
-\+ Exclude shows without unseen aired episodes  
-\+ Added overflow buttons for easier access to context menus  
-\+ Pull-To-Refresh to update shows  
-\* Sorting shows by first unseen episode  
-\* Clarified toggle and sort options  
-\* Not showing "null" entries from DB  
-\* Posters now fill row height, aspect ratios independent of screen's  
-  
-__Seasons/Episodes list__:  
-\+ Showing "[aired] of [season episodes]"  
-\+ Aired date in episodes list  
-\+ Date of when episode was marked as seen is shown next to checkmark  
-\+ Click on episode title for details, on checkmark to change seen state  
-\+ Automatically scroll to current season / first unwatched episode  
-\* Big performance improvement for entirely rewritten Seasons activity: is now almost instant  
-  
-__Add show__:  
-\+ Icon resized rate_star_med_on_holo_dark for added shows  
-\+ Icon ic_menu_add for new shows  
-\+ Choose the synopsis language per show  
-\* Fixed search not working after initial search  
-\* Centered icons vertically in search results  
-\* Large-size posters aren't cached, to save space in /data/data/  
-  
-__Update__:  
-\* Prevent double episode entries  
-  
-__Other__:  
-\+ Click on an episode air date to add it to your calendar  
-\+ Option to use a mirror if TheTVDB.com is too slow in your region  
-\+ Menu (overflow) button should show up in Android 3.0+  
-\+ Dutch, French, German, Spanish and Russian translations  
-\+ Choose which synopsis language to fetch from TheTVDB  
-\+ Modern looking layout  
-\+ Swipe left-to-right acts as back button  
-\+ Animations that help understand the app's structure  
-\+ Backup/restore database  
-\+ Automatically create backups (max. once a day)
-\* Date/time format according to locale  
-\* Big performance improvement for Overview activity (values are kept up-to-date in series table)  
-\* Some progress dialogs cancelable  
-\* Update of all shows continues when navigating away from DroidShows  
-\* Screen off/rotating screen/navigating away from app during update poses no problems anymore  
-\* [Exit] removes app from memory  
-\* Fixed UI glitches/styles  
-\* Code clean-up (all layouts revised)  
-  
-&copy;2010 [Carlos Limpinho, Paulo Cabido](https://code.google.com/p/droidseries) under GPLv3  
-Modified by Mikael Berthe  
-&copy;2014-2018 Guillaume under GPLv3  
-New icon is a mix of work by [Thrasos Varnava](https://iconeasy.com/icon/tv-shows-2-icon) and [Taenggo](https://wallalay.com/wallpapers-for-android-67-177682-desktop-background.html)
+## Installation
+
+Requires Android 5.0 (API 21) or newer.
+
+Download the APK from the **[latest release](https://github.com/steps2/droidshows/releases/latest)** — it installs over any previous 1.x version.
+
+> **Coming from the old beta builds?** The app now ships under the new package name `app.tvmovie.tracker`, so it installs *alongside* the old beta rather than over it. To move your data: in the old app use **Back up now**, install the new version, then **Restore** — everything carries over.
+
+## Getting started
+
+- **TV shows** work out of the box — episode data comes from TVMaze, no key needed.
+- **Movies** need your own TMDB API key: paste it into **Settings** once and the Movies section, Discover films and where-to-watch all light up.
+
+## Privacy
+
+No account, no analytics, no ads. Your library lives on your device and in your own backup file. The only network traffic is episode and film data from TVMaze and TMDB.
+
+## Credits
+
+- Episode data: [TVMaze](https://www.tvmaze.com)
+- Film data and artwork: [TMDB](https://www.themoviedb.org) — this product uses the TMDB API but is not endorsed or certified by TMDB
+- Originally based on [DroidShows](https://github.com/ItzNotABug/droidshows)
+
+## Licence
+
+GNU General Public Licence v3.0 — see [LICENSE.md](LICENSE.md).
