@@ -96,7 +96,7 @@ jobs:
           ms = cd_off - 16
           assert data[ms:cd_off] == magic, "signing block magic not found"
           s2 = struct.unpack('<Q', data[ms-8:ms])[0]
-          ss = ms - 8 - s2
+          ss = ms + 8 - s2
           s1 = struct.unpack('<Q', data[ss:ss+8])[0]
           assert s1 == s2, "signing block size mismatch"
           pos, dep = ss + 8, False
