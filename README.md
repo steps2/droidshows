@@ -1,68 +1,109 @@
-<p align="center">
-  <img src="screenshots/app-icon.png" width="120" alt="TV Movie Tracker icon">
-</p>
+# TV Movie Tracker
 
-<h1 align="center">TV Movie Tracker</h1>
+**Every show. Every film. Right where you left off.**
 
-<p align="center">Track every TV show and movie you watch — episodes, films, ratings and what's on next.</p>
+[![Latest release](https://img.shields.io/github/v/release/steps2/tvmovietracker)](https://github.com/steps2/tvmovietracker/releases/latest)
+[![Build status](https://github.com/steps2/tvmovietracker/actions/workflows/build-apk.yml/badge.svg)](https://github.com/steps2/tvmovietracker/actions)
+[![GPL-3.0 licence](https://img.shields.io/github/license/steps2/tvmovietracker)](LICENSE)
 
-<p align="center">
-  <a href="https://github.com/steps2/tvmovietracker/releases/latest"><img src="https://img.shields.io/github/v/release/steps2/tvmovietracker" alt="Latest release"></a>
-  <img src="https://github.com/steps2/tvmovietracker/actions/workflows/build-apk.yml/badge.svg" alt="Build status">
-  <img src="https://img.shields.io/github/license/steps2/tvmovietracker" alt="GPL-3.0 licence">
-</p>
+![TV Movie Tracker on Android](screenshots/phone-mockup.png)
+
+TV Movie Tracker is the Android app for people who take their watching seriously.
+Track TV shows and films across **Watching**, **Finished** and **History**,
+get told when new episodes air, and discover what to watch next — all in one
+fast, private, offline-first app. No account, no cloud, no ads. Your library
+lives on your device.
 
 ## Screenshots
 
-| Watching · TV shows | Discover | Statistics | Calendar |
+| Watching – TV | Watching – Movies | Finished | History |
 |---|---|---|---|
-| <img src="screenshots/watching-shows.png" width="180" alt="Watching tab"> | <img src="screenshots/discover.png" width="180" alt="Discover"> | <img src="screenshots/statistics.png" width="180" alt="Statistics"> | <img src="screenshots/calendar.png" width="180" alt="Calendar"> |
-| Watching · Movies | Finished | History | Settings |
-| <img src="screenshots/watching-movies.png" width="180" alt="Movies watching tab"> | <img src="screenshots/finished.png" width="180" alt="Finished tab"> | <img src="screenshots/history.png" width="180" alt="History tab"> | <img src="screenshots/settings.png" width="180" alt="Settings"> |
+| ![Watching TV shows](screenshots/watching-shows.png) | ![Watching movies](screenshots/watching-movies.png) | ![Finished](screenshots/finished.png) | ![History](screenshots/history.png) |
+
+| Discover | Statistics | Calendar | Settings |
+|---|---|---|---|
+| ![Discover](screenshots/discover.png) | ![Statistics](screenshots/statistics.png) | ![Calendar](screenshots/calendar.png) | ![Settings](screenshots/settings.png) |
 
 ## Features
 
-- **TV shows and movies, side by side** — each with Watching, Finished and History tabs
-- **Episode tracking** — mark episodes watched, see what's next and when it airs
-- **Discover** — browse trending and popular shows and films, add them with a tap
-- **Search** — find anything in your library, in every tab
-- **New-episode notifications** — get told when a show you follow airs a new episode
-- **Up Next widget** — next unwatched episode per show, right on your home screen
-- **Where to watch** — streaming and purchase options for films (via TMDB)
-- **Statistics** — episodes and hours watched, watch streaks, library counts, average personal rating
-- **Calendar** — month view with air-date dots; tap a day to see what's on
-- **Personal ratings** — rate shows and films in half stars, next to the online score
-- **Swipe actions** — swipe right to archive, swipe left to mark the next episode watched
-- **Sync** — refresh your whole library from TVMaze and TMDB with one tap
-- **Thin progress bar** — syncs and searches never block the app; it stays usable throughout
-- **Backup and restore** — your whole library, including posters, in one file
-- **Posters that survive** — library posters live in persistent storage, so "Clear cache" never wipes them
-- **Themes** — Automatic, Light and Dark with Material You dynamic colours, plus pure-black AMOLED
-- **Seven languages** — English, German, Spanish, French, Italian, Dutch and Russian
+- **TV shows, powered by TVMaze** — search and add any series; no API key needed.
+- **Movies, powered by TMDB** — your personal film library with posters and details.
+- **Watching / Finished / History** — separate tabs for shows and films, so your
+  in-progress series never get buried under films you've finished.
+- **Discover** — browse trending and top-rated shows and films, read the synopsis,
+  add anything to your library with a single tap.
+- **New-episode notifications** — a daily check plus alerts after every sync, one
+  per show, so you never miss a premiere.
+- **Up Next widget** — your next unwatched episode for every show, right on your
+  home screen.
+- **Where to watch** — streaming and rental options in your region, on every
+  details screen.
+- **Statistics** — episodes and hours watched, current and longest streaks,
+  library counts and your average personal rating.
+- **Calendar** — a month view dotted with air dates; tap any day to see what's on.
+- **Personal ratings** — five stars in half steps, shown beside the online score.
+- **Fast by design** — thin non-blocking progress indicators keep the app usable
+  while syncs run; posters load smoothly and live in permanent storage, never in
+  the disposable cache.
+- **Swipe actions** — swipe right to archive, left to mark watched, keep swiping
+  to hop between tabs.
+- **Backup & restore** — one tap backs up your whole library; restore it on any
+  device.
+- **Your look** — Automatic, Light and Dark themes with Material You dynamic
+  colours on Android 12+, plus a true-black AMOLED mode.
+- **Seven languages** — English, German, Spanish, French, Italian, Dutch, Russian.
 
 ## Installation
 
-Requires Android 5.0 (API 21) or newer.
+Requires **Android 5.0 (API 21)** or newer.
 
-Download the APK from the **[latest release](https://github.com/steps2/tvmovietracker/releases/latest)** — it installs over any previous 1.x version.
+Download the APK from the
+**[latest release](https://github.com/steps2/tvmovietracker/releases/latest)** —
+it installs over any previous 1.x version.
 
-> **Coming from the old beta builds?** The app now ships under the new package name `app.tvmovie.tracker`, so it installs *alongside* the old beta rather than over it. To move your data: in the old app use **Back up now**, install the new version, then **Restore** — everything carries over.
+- **TV shows** work out of the box — TVMaze needs no key.
+- **Movies** need a free TMDB API key: create one at
+  [themoviedb.org](https://www.themoviedb.org/settings/api) and paste it into
+  the app's Settings.
 
-## Getting started
+## Migrating from DroidShows
 
-- **TV shows** work out of the box — episode data comes from TVMaze, no key needed.
-- **Movies** need your own TMDB API key: paste it into **Settings** once and the Movies section, Discover films and where-to-watch all light up.
+Coming from the original DroidShows or an older beta? In the old app choose
+**Back up now** from the menu, install TV Movie Tracker, then restore the backup
+file. Your shows, history and ratings come along.
 
-## Privacy
+## History
 
-No account, no analytics, no ads. Your library lives on your device and in your own backup file. The only network traffic is episode and film data from TVMaze and TMDB.
+TV Movie Tracker stands on the shoulders of a long line of open-source TV
+trackers:
+
+- **2010** — *droidseries* by C. Limpinho and P. Cabido (Google Code) starts it all.
+- *droidseries* is carried forward by M. Berthe.
+- **2014** — Guillaume (ltGuillaume) builds **DroidShows** on that foundation and
+  releases it under the GPL-3.0 on XDA.
+- The years pass, and TheTVDB's v1 API — the heart DroidShows depended on — goes
+  dark. Shows can no longer be added; the app slowly stops working.
+- **2026** — the project is forked, the show backend is migrated to **TVMaze**,
+  a full **movie** library backed by **TMDB** is added, and the whole app is
+  rebuilt with a modern Material 3 interface. Reborn as **TV Movie Tracker**.
+
+The spirit is unchanged: a tracker that respects your data and gets out of your
+way — now built to last.
 
 ## Credits
 
-- Episode data: [TVMaze](https://www.tvmaze.com)
-- Film data and artwork: [TMDB](https://www.themoviedb.org) — this product uses the TMDB API but is not endorsed or certified by TMDB
-- Originally based on [DroidShows](https://github.com/ItzNotABug/droidshows)
+- **TVMaze** ([tvmaze.com](https://www.tvmaze.com)) — TV show data, free for everyone.
+- **TMDB** ([themoviedb.com](https://www.themoviedb.org)) — movie data, posters
+  and where-to-watch information. *This product uses the TMDB API but is not
+  endorsed or certified by TMDB.*
+- **ltGuillaume**, C. Limpinho, P. Cabido and M. Berthe — for DroidShows and the
+  droidseries lineage this app grew from.
+- **App icon** — a mix of work by Thrasos Varnava
+  ([iconeasy.com](https://www.iconeasy.com)) and Taenggo
+  ([wallalay.com](https://www.wallalay.com)); Material icon by Listy2021 and
+  ltGuillaume.
 
 ## Licence
 
-GNU General Public Licence v3.0 — see [LICENSE.md](LICENSE.md).
+TV Movie Tracker is free software released under the
+**GNU General Public License v3.0** — see [LICENSE](LICENSE).
