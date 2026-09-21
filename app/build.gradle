@@ -59,6 +59,14 @@ android {
     lint {
         abortOnError false
     }
+    // F-Droid: drop the AGP "Dependency metadata" signing block (0x504b4453).
+    // It is an encrypted, non-deterministic blob for Google Play's benefit and
+    // F-Droid's "check apk" scanner rejects any APK carrying it. No app code
+    // is affected; Play bundles keep their own copy via includeInBundle.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 dependencies {
