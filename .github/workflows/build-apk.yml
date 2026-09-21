@@ -24,7 +24,10 @@ jobs:
           set -eux
           git fetch origin develop
           git reset --hard 98658696cd1915aa4bf1acb0e3a64d5f27919799
-          git cherry-pick -n 1d6d91f6e57f89affded9b36b0f971e25026eab4 777308d823082f231b9bb7d76bbd448d29d24ea5
+          # Apply ONLY the build-process diffs (signing config + Gradle heap),
+          # not the workflow-file changes from those commits (this file is ours).
+          git diff f7ac8d0b7a2412289bb76dc8dc911081faaa3e41 1d6d91f6e57f89affded9b36b0f971e25026eab4 -- app/build.gradle | git apply --index
+          git diff 1d6d91f6e57f89affded9b36b0f971e25026eab4 777308d823082f231b9bb7d76bbd448d29d24ea5 -- gradle.properties | git apply --index
           git log -1 --format='HEAD=%H (must equal the pinned commit)'
           git status --short | head -20
 
