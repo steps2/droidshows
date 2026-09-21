@@ -96,7 +96,7 @@ way — now built to last.
 - **TMDB** ([themoviedb.com](https://www.themoviedb.org)) — movie data, posters
   and where-to-watch information. *This product uses the TMDB API but is not
   endorsed or certified by TMDB.*
-- **ltGuillaume**, C. Limpinho, P. Cabido and M. Berthe — for DroidShows and the
+- [**ltGuillaume**](https://github.com/ltguillaume), [C. Limpinho](https://github.com/ltguillaume/droidseries), [P. Cabido](https://github.com/ltguillaume/droidseries) and [**M. Berthe**](https://github.com/McKael) — for DroidShows and the
   droidseries lineage this app grew from.
 - **App icon** — a mix of work by Thrasos Varnava
   ([iconeasy.com](https://www.iconeasy.com)) and Taenggo
