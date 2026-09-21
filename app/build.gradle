@@ -35,6 +35,15 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Sign release builds with the permanent key when the CI secrets
+            // are present, so published APKs are real release builds
+            // (minified, resource-shrunk, not debuggable) that install over
+            // previous releases. Without the env vars (e.g. F-Droid builds)
+            // no signing config is applied and the build stays unsigned.
+            if (System.getenv("BETA_KEYSTORE_FILE") != null) {
+                signingConfig signingConfigs.beta
+            }
         }
         debug {
             // used to allow different configurations between debung and release to protect production data
