@@ -40,6 +40,11 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/build-output.log"
           test ${PIPESTATUS[0]} -eq 0
 
+      - name: Build release APK (unsigned compile check for F-Droid)
+        run: |
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/build-output.log"
+          test ${PIPESTATUS[0]} -eq 0
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
