@@ -2,7 +2,7 @@ name: Build debug APK
 
 on:
   push:
-    branches: [ tvmaze-migration ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
