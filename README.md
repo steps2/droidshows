@@ -65,6 +65,12 @@ Download the APK from the
 **[latest release](https://github.com/steps2/tvmovietracker/releases/latest)** —
 it installs over any previous 1.x version.
 
+[<img src="screenshots/badge_obtainium.png" alt="Get it on Obtainium" height="80">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22app.tvmovie.tracker%22%2C%22url%22%3A%22https%3A//github.com/steps2/tvmovietracker%22%2C%22author%22%3A%22steps2%22%2C%22name%22%3A%22TV%20Movie%20Tracker%22%7D)
+
+Prefer automatic updates? Tap the badge to add TV Movie Tracker to
+[Obtainium](https://obtainium.imranr.dev/) — it will notify you whenever a new
+release is out. (If Obtainium isn't installed, the link offers to get it first.)
+
 - **TV shows** work out of the box — TVMaze needs no key.
 - **Movies** need a free TMDB API key: create one at
   [themoviedb.org](https://www.themoviedb.org/settings/api) and paste it into
