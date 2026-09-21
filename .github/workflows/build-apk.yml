@@ -115,7 +115,9 @@ jobs:
         run: |
           set -eux
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | grep -i "SHA-256" | grep -q "79:D4:6B:B4:96:70:28:A4:22:50:D2:83:96:3C:68:3A:52:95:6C:72:D7:5D:DE:52:D1:BC:1E:6E:4B:D0:26:6A"
+          CERT=$("$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | grep -i "SHA-256 digest" | awk '{print $NF}' | tr 'A-F' 'a-f' | tr -d ':')
+          echo "signer SHA-256: $CERT"
+          test "$CERT" = "79d46bb4967028a42250d283963c683a52956c72d75dde52d1bc1e6e4bd0266a"
 
       - name: Replace v1.1.5 GitHub release asset
         env:
