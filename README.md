@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="screenshots/app-icon.png" width="120" alt="TV Movie Tracker icon">
+</p>
+
 # TV Movie Tracker
 
 **Every show. Every film. Right where you left off.**
