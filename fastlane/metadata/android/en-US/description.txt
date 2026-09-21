@@ -1,0 +1,10 @@
+TV Movie Tracker is a watch-list app for TV shows and movies.
+
+* Track watching, finished and history lists for shows and films
+* New-episode notifications
+* Discover trending shows and movies
+* Personal ratings, statistics and a calendar of air dates
+* Home-screen widget with your next unwatched episodes
+* Backup and restore your library; no account needed
+
+TV data comes from TVMaze (no key required). Movie data and where-to-watch info via TMDB, which needs a free key entered in the app's Settings.
